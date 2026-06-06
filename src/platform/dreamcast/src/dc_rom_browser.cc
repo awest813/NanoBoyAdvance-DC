@@ -4,6 +4,7 @@
 #include "dc_rom_browser.hh"
 
 #include "dc_memory.hh"
+#include <platform/loader/dc_virtual_fs.hh>
 #include <platform/loader/rom.hh>
 
 #include <algorithm>
@@ -75,31 +76,44 @@ static auto AddROMEntry(
   DreamcastConfig const& config,
   bool validate = true
 ) -> void {
-  if(!seen.insert(path).second) {
+#if defined(PLATFORM_DREAMCAST)
+  const fs::path entry_path{ResolveDreamcastVirtualPath(path)};
+#else
+  const fs::path entry_path = path;
+#endif
+
+  if(!seen.insert(entry_path).second) {
     return;
   }
 
-  if(validate && ROMLoader::Validate(path) != ROMLoader::Result::Success) {
+  if(validate && ROMLoader::Validate(entry_path) != ROMLoader::Result::Success) {
     return;
   }
 
   size_t size = 0;
-  if(ROMLoader::GetFileSize(path, size) != ROMLoader::Result::Success) {
-    return;
-  }
+  const bool have_size = ROMLoader::GetFileSize(entry_path, size) == ROMLoader::Result::Success;
 
   // Strip the ISO9660 version suffix (e.g. ";1") from the display label so
   // disc filenames like "GAME.GBA;1" appear as "GAME.GBA" in the menu.
-  auto label = path.filename().string();
+  auto label = entry_path.filename().string();
   const auto semicolon = label.rfind(';');
   if(semicolon != std::string::npos) {
     label.resize(semicolon);
   }
 
+  if(have_size) {
+    entries.push_back(ROMEntry{
+      entry_path,
+      BuildROMLabel(std::move(label), size, config),
+      size
+    });
+    return;
+  }
+
   entries.push_back(ROMEntry{
-    path,
-    BuildROMLabel(std::move(label), size, config),
-    size
+    entry_path,
+    std::move(label) + " (size unknown)",
+    0
   });
 }
 
@@ -195,20 +209,34 @@ auto ROMBrowser::Scan(DreamcastConfig const& config) -> std::vector<ROMEntry> {
 #endif
 
     if(last_rom_exists &&
-        ROMLoader::Validate(last_path) == ROMLoader::Result::Success &&
-        seen.insert(last_path).second) {
-      size_t size = 0;
-      if(ROMLoader::GetFileSize(last_path, size) == ROMLoader::Result::Success) {
-        auto last_label = last_path.filename().string();
+        ROMLoader::Validate(last_path) == ROMLoader::Result::Success) {
+#if defined(PLATFORM_DREAMCAST)
+      const fs::path entry_path{ResolveDreamcastVirtualPath(last_path)};
+#else
+      const fs::path entry_path = last_path;
+#endif
+
+      if(seen.insert(entry_path).second) {
+        size_t size = 0;
+        auto last_label = entry_path.filename().string();
         const auto sc = last_label.rfind(';');
         if(sc != std::string::npos) {
           last_label.resize(sc);
         }
-        entries.push_back(ROMEntry{
-          last_path,
-          BuildROMLabel(std::move(last_label), size, config) + " (last)",
-          size
-        });
+
+        if(ROMLoader::GetFileSize(entry_path, size) == ROMLoader::Result::Success) {
+          entries.push_back(ROMEntry{
+            entry_path,
+            BuildROMLabel(std::move(last_label), size, config) + " (last)",
+            size
+          });
+        } else {
+          entries.push_back(ROMEntry{
+            entry_path,
+            std::move(last_label) + " (size unknown) (last)",
+            0
+          });
+        }
       }
     }
   }

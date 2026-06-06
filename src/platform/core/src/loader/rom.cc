@@ -6,6 +6,7 @@
 #include <nba/rom/backup/sram.hh>
 #include <nba/rom/header.hh>
 #include <nba/rom/rom.hh>
+#include <platform/loader/dc_virtual_fs.hh>
 #include <platform/loader/rom.hh>
 #include <atom/logger/logger.hh>
 #include <unarr.h>
@@ -22,11 +23,6 @@ using BackupType = Config::BackupType;
 static constexpr size_t kMaxROMSize = 32 * 1024 * 1024; // 32 MiB
 
 #if defined(PLATFORM_DREAMCAST)
-static auto IsDreamcastVirtualPath(fs::path const& path) -> bool {
-  const auto path_string = path.string();
-  return path_string.rfind("/cd/", 0) == 0 || path_string.rfind("/pc/", 0) == 0;
-}
-
 // Scans a ROM file in chunks to detect the save backup type from embedded
 // signature strings (e.g. "SRAM_V", "EEPROM_V").  This avoids loading the
 // entire cartridge into memory, which is essential for large ROMs on Dreamcast.
@@ -44,7 +40,7 @@ static auto GetBackupTypeFromFile(fs::path const& path, size_t rom_size) -> Conf
   static constexpr size_t kMaxSigLen = 10; // length of longest possible signature
   static constexpr size_t kChunkSize = 64 * 1024;
 
-  auto* file = std::fopen(path.string().c_str(), "rb");
+  auto* file = OpenDreamcastVirtualFile(path);
   if(!file) {
     return BackupType::Detect;
   }
@@ -119,6 +115,8 @@ auto ROMLoader::Load(
 ) -> Result {
 #if defined(PLATFORM_DREAMCAST)
   if(IsDreamcastVirtualPath(rom_path)) {
+    const auto resolved_path = ResolveDreamcastVirtualPath(rom_path);
+
     size_t size = 0;
     auto size_status = GetFileSize(rom_path, size);
     if(size_status != Result::Success) {
@@ -129,7 +127,7 @@ auto ROMLoader::Load(
       return Result::BadImage;
     }
 
-    auto* file = std::fopen(rom_path.string().c_str(), "rb");
+    auto* file = OpenDreamcastVirtualFile(rom_path);
     if(!file) {
       return Result::CannotOpenFile;
     }
@@ -153,7 +151,7 @@ auto ROMLoader::Load(
       if(game_info.backup_type != BackupType::Detect) {
         backup_type = game_info.backup_type;
       } else {
-        backup_type = GetBackupTypeFromFile(rom_path, size);
+        backup_type = GetBackupTypeFromFile(fs::path{resolved_path}, size);
         if(backup_type == BackupType::Detect) {
           ATOM_WARN("ROMLoader: failed to detect backup type!");
           backup_type = BackupType::SRAM;
@@ -183,7 +181,7 @@ auto ROMLoader::Load(
     }
 
     core->Attach(ROM{
-      rom_path.string(),
+      resolved_path,
       size,
       std::move(backup),
       std::move(gpio),
@@ -269,25 +267,18 @@ auto ROMLoader::Load(
 
 auto ROMLoader::ReadFile(fs::path const& path, std::vector<u8>& file_data) -> Result {
 #if defined(PLATFORM_DREAMCAST)
-  const auto path_string = path.string();
-  if(path_string.rfind("/cd/", 0) == 0 || path_string.rfind("/pc/", 0) == 0) {
-    auto* file = std::fopen(path_string.c_str(), "rb");
+  if(IsDreamcastVirtualPath(path)) {
+    size_t size = 0;
+    if(!GetDreamcastVirtualFileSize(path, size, kMaxROMSize)) {
+      return Result::CannotOpenFile;
+    }
+
+    auto* file = OpenDreamcastVirtualFile(path);
     if(!file) {
       return Result::CannotOpenFile;
     }
 
-    if(std::fseek(file, 0, SEEK_END) != 0) {
-      std::fclose(file);
-      return Result::CannotOpenFile;
-    }
-
-    const auto size = std::ftell(file);
-    if(size < 0 || std::fseek(file, 0, SEEK_SET) != 0) {
-      std::fclose(file);
-      return Result::CannotOpenFile;
-    }
-
-    file_data.resize(static_cast<size_t>(size));
+    file_data.resize(size);
     const auto read = std::fread(file_data.data(), 1, file_data.size(), file);
     std::fclose(file);
 
@@ -440,7 +431,7 @@ auto ROMLoader::Validate(fs::path const& path) -> Result {
       return Result::BadImage;
     }
 
-    auto* file = std::fopen(path.string().c_str(), "rb");
+    auto* file = OpenDreamcastVirtualFile(path);
     if(!file) {
       return Result::CannotOpenFile;
     }
@@ -471,26 +462,10 @@ auto ROMLoader::GetFileSize(fs::path const& path, size_t& file_size) -> Result {
   file_size = 0;
 
 #if defined(PLATFORM_DREAMCAST)
-  const auto path_string = path.string();
-  if(path_string.rfind("/cd/", 0) == 0 || path_string.rfind("/pc/", 0) == 0) {
-    auto* file = std::fopen(path_string.c_str(), "rb");
-    if(!file) {
+  if(IsDreamcastVirtualPath(path)) {
+    if(!GetDreamcastVirtualFileSize(path, file_size, kMaxROMSize)) {
       return Result::CannotOpenFile;
     }
-
-    if(std::fseek(file, 0, SEEK_END) != 0) {
-      std::fclose(file);
-      return Result::CannotOpenFile;
-    }
-
-    const auto size = std::ftell(file);
-    std::fclose(file);
-
-    if(size < 0) {
-      return Result::CannotOpenFile;
-    }
-
-    file_size = static_cast<size_t>(size);
     return Result::Success;
   }
 #endif
