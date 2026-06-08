@@ -19,9 +19,22 @@ auto MP2K::ReadWaveInfo(u32 address, Sampler::WaveInfo& wave_info) -> bool {
 }
 
 auto MP2K::ResolveWaveData(u32 address, size_t size, Sampler& sampler) -> u8* {
-  if(auto* host = bus.GetHostAddress<u8>(address, size)) {
-    sampler.wave_data_owned.clear();
-    return host;
+#if defined(PLATFORM_DREAMCAST)
+  // A paged ROM hands back a pointer into the LRU page cache that is only valid
+  // until the next paged read.  The sampler caches wave_data across audio
+  // frames, during which CPU instruction fetches can evict and reload that page
+  // with different ROM content, so take an owned snapshot instead of a live
+  // view.  (Flat ROMs keep the zero-copy host pointer.)
+  const bool volatile_host = bus.memory.rom.IsPagedROM();
+#else
+  constexpr bool volatile_host = false;
+#endif
+
+  if(!volatile_host) {
+    if(auto* host = bus.GetHostAddress<u8>(address, size)) {
+      sampler.wave_data_owned.clear();
+      return host;
+    }
   }
 
   sampler.wave_data_owned.resize(size);
