@@ -119,6 +119,55 @@ auto DCInput::PollInput(CoreBase& core, DCGameplayRequest& request) -> bool {
   }
 
   return exit_combo_frames_ >= kExitDebounceFrames;
+#elif NBA_DC_HAS_SDL_MENU
+  auto event = SDL_Event{};
+  bool exit_requested = false;
+  while(SDL_PollEvent(&event)) {
+    if(event.type == SDL_EVENT_QUIT) {
+      exit_requested = true;
+      continue;
+    }
+
+    if(event.type != SDL_EVENT_KEY_DOWN || event.key.repeat) {
+      continue;
+    }
+
+    switch(event.key.scancode) {
+      case SDL_SCANCODE_ESCAPE:
+        request.open_pause_menu = true;
+        break;
+      case SDL_SCANCODE_F5:
+        request.save_state = true;
+        break;
+      case SDL_SCANCODE_F8:
+        request.load_state = true;
+        break;
+      case SDL_SCANCODE_PAGEUP:
+        request.save_slot_delta = 1;
+        break;
+      case SDL_SCANCODE_PAGEDOWN:
+        request.save_slot_delta = -1;
+        break;
+      case SDL_SCANCODE_Q:
+        exit_requested = true;
+        break;
+      default:
+        break;
+    }
+  }
+
+  const bool* keys = SDL_GetKeyboardState(nullptr);
+  core.SetKeyStatus(Key::A,      keys[SDL_SCANCODE_Z] || keys[SDL_SCANCODE_RETURN]);
+  core.SetKeyStatus(Key::B,      keys[SDL_SCANCODE_X] || keys[SDL_SCANCODE_BACKSPACE]);
+  core.SetKeyStatus(Key::L,      keys[SDL_SCANCODE_A]);
+  core.SetKeyStatus(Key::R,      keys[SDL_SCANCODE_S]);
+  core.SetKeyStatus(Key::Start,  keys[SDL_SCANCODE_RETURN]);
+  core.SetKeyStatus(Key::Select, keys[SDL_SCANCODE_RSHIFT] || keys[SDL_SCANCODE_BACKSPACE]);
+  core.SetKeyStatus(Key::Left,   keys[SDL_SCANCODE_LEFT]);
+  core.SetKeyStatus(Key::Right,  keys[SDL_SCANCODE_RIGHT]);
+  core.SetKeyStatus(Key::Up,     keys[SDL_SCANCODE_UP]);
+  core.SetKeyStatus(Key::Down,   keys[SDL_SCANCODE_DOWN]);
+  return exit_requested;
 #else
   (void)core;
   (void)request;
@@ -170,6 +219,39 @@ auto DCInput::PollMenu(DCMenuInput& menu) -> void {
   previous_buttons_ = current;
   previous_joyx_ = state->joyx;
   previous_joyy_ = state->joyy;
+#elif NBA_DC_HAS_SDL_MENU
+  menu = {};
+
+  auto event = SDL_Event{};
+  while(SDL_PollEvent(&event)) {
+    if(event.type == SDL_EVENT_QUIT) {
+      menu.start = true;
+      menu.cancel = true;
+      continue;
+    }
+
+    if(event.type != SDL_EVENT_KEY_DOWN || event.key.repeat) {
+      continue;
+    }
+
+    switch(event.key.scancode) {
+      case SDL_SCANCODE_UP:        menu.up = true; break;
+      case SDL_SCANCODE_DOWN:      menu.down = true; break;
+      case SDL_SCANCODE_LEFT:      menu.left = true; break;
+      case SDL_SCANCODE_RIGHT:     menu.right = true; break;
+      case SDL_SCANCODE_RETURN:
+      case SDL_SCANCODE_SPACE:
+      case SDL_SCANCODE_Z:         menu.confirm = true; break;
+      case SDL_SCANCODE_ESCAPE:
+      case SDL_SCANCODE_BACKSPACE:
+      case SDL_SCANCODE_X:         menu.cancel = true; break;
+      case SDL_SCANCODE_Y:
+      case SDL_SCANCODE_S:         menu.settings = true; break;
+      case SDL_SCANCODE_F1:
+      case SDL_SCANCODE_TAB:       menu.start = true; break;
+      default:                     break;
+    }
+  }
 #else
   (void)menu;
 #endif
@@ -200,7 +282,26 @@ auto DCInput::WaitForButton(Button button) -> void {
     vid_waitvbl();
   }
 #else
+#if NBA_DC_HAS_SDL_MENU
+  auto event = SDL_Event{};
+  bool pressed = false;
+  while(!pressed && SDL_WaitEvent(&event)) {
+    if(event.type == SDL_EVENT_QUIT) {
+      break;
+    }
+    if(event.type != SDL_EVENT_KEY_DOWN || event.key.repeat) {
+      continue;
+    }
+    if(button == Button::Start &&
+        (event.key.scancode == SDL_SCANCODE_RETURN ||
+         event.key.scancode == SDL_SCANCODE_SPACE ||
+         event.key.scancode == SDL_SCANCODE_F1)) {
+      pressed = true;
+    }
+  }
+#else
   (void)button;
+#endif
 #endif
 }
 

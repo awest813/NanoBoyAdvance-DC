@@ -71,7 +71,7 @@ mkisofs -C 0,11702 -V "NBA_DC" -G IP.BIN -l -o nba-dc.iso cd_root/
 |---------------|------|-------------|
 | GBA BIOS | `/cd/bios.bin` or `/pc/bios.bin` | Required. Configurable in settings |
 | GBA ROMs | `/pc/roms/*.{gba,bin,zip}` or `/cd/*.{gba,bin,zip}` or `/cd/gbaDC/` | Scanned by the in-app ROM browser (gpSPDC-style `gbaDC` folder included) |
-| Save data | `/pc/saves/<rom>.sav` | Per-ROM backup saves (configurable folder) |
+| Save data | `/pc/saves/<rom>.sav` or `/vmu/a1/NBA########` | Per-ROM backup saves (configurable folder) |
 | Save states | `/pc/states/<rom>.ss0`–`.ss9` | 10 slots per ROM (configurable folder) |
 | Cheat files | `<rom>.cht` beside ROM or `/cd/gbaDC/` | gpSP-compatible GameShark / PAR `.cht` |
 | Idle-loop hints | `/cd/gbaDC/game_config.txt`, `/pc/game_config.txt` | gpSP-compatible `idle_loop_eliminate_target` entries |
@@ -85,6 +85,11 @@ Writable `/pc` paths require an SD/IDE adapter or equivalent host filesystem mou
 - Backup saves are written to the writable filesystem (`/pc/saves` by default).
 - Each ROM gets its own `<rom-stem>.sav` file.
 - The save directory is created automatically with `mkdir` on first use.
+- Selecting **Save folder: `/vmu/a1`** stores saves on the first VMU in the
+  first controller. VMU files use compact `NBA########` filenames because the
+  VMU filesystem cannot store long ROM names. Small EEPROM/SRAM saves are the
+  best fit; 128 KiB FLASH saves may exceed available VMU capacity and fall back
+  to in-memory progress if the VMU write fails.
 - On real KallistiOS hardware the save file is opened and written through the
   KOS virtual filesystem; on Flycast (where the `/pc/` stream may not support
   writes) saves remain in-memory for the session only.
@@ -97,7 +102,6 @@ Writable `/pc` paths require an SD/IDE adapter or equivalent host filesystem mou
   your progress was persisted (`Save Written`) or could not be saved
   (`Save Not Written`); the latter suggests pointing the save folder at a
   writable `/pc` location.
-- **VMU saves are not supported yet** — VMU remains planned for a future milestone.
 
 ### ROM Loading
 
@@ -162,15 +166,21 @@ Configurable options:
 - **Performance** (`Accuracy` / `Balanced` / `Speed` — see Performance Profiles below)
 - **Show FPS** (`On` / `Off` — overlays the measured frame rate during play)
 - **Large ROMs** (`On` / `Off` — allows >8 MiB ROMs for 32 MB mod testing)
-- **Frame skip** (0–3 extra emulated frames per display frame)
+- **Frame skip** (`Auto` or 0–3 extra emulated frames per display frame)
 - **Audio buffer** (2048 / 4096 / 8192 bytes — lower = less latency, higher = safer)
 - **BIOS path** (`/cd/bios.bin` or `/pc/bios.bin`)
 - **ROM folder** (`/pc/roms` or `/cd`)
-- **Save folder** (`/pc/saves` or `/pc`)
+- **Save folder** (`/pc/saves`, `/pc`, or `/vmu/a1`)
 
-Selecting a **Performance** profile rewrites the audio/video/frame-skip knobs
-to that profile's preset; you can then fine-tune Frame skip and Audio buffer
-afterward without losing the rest of the preset.
+Selecting a **Performance** profile rewrites the audio/video/frame-skip knobs,
+disables Auto frame skip, and applies that profile's preset; you can then
+fine-tune Frame skip and Audio buffer afterward without losing the rest of the
+preset.
+
+When **Frame skip** is set to **Auto**, the runtime raises the active skip value
+when measured FPS drops below the full-speed target and slowly lowers it after
+several stable samples. The FPS overlay shows this as `FSA<n>`; manual mode is
+shown as `FS <n>`.
 
 ## Hardware Mapping (Gameplay)
 
@@ -199,6 +209,22 @@ afterward without losing the rest of the preset.
 
 Dreamcast **X** and **Y** map to GBA **L** and **R** during play, so hold both shoulder buttons together with Start or Select. A short on-screen message confirms save/load results.
 
+### SDL host menu fallback
+
+Non-cross Dreamcast builds can optionally link SDL3 when it is installed on the
+host. This is intended for menu smoke testing without KallistiOS hardware.
+
+| Key | Menu action |
+|-----|-------------|
+| Arrow keys | Move / adjust |
+| Return / Space / Z | Confirm |
+| Escape / Backspace / X | Cancel |
+| Y / S | Settings |
+| F1 / Tab | Start |
+
+During host gameplay smoke tests, Escape opens the pause menu, F5/F8 save/load
+states, PageUp/PageDown adjust the state slot, and Q exits to the browser.
+
 ### Cheats
 
 Place a gpSP-style `.cht` file next to the ROM (same base name) or under `/cd/gbaDC/`. Supported headers include `PAR_v3`, `gameshark_v3`, and the older v1/v2 variants. Open the pause menu, choose **Cheats**, and toggle entries on or off with **A** or **Left/Right**. Enabled cheats are applied once per emulated frame before the core runs.
@@ -208,7 +234,7 @@ Errors and loading screens show on-screen text with path details. Press Start to
 ## Current Limitations
 
 - **Cheats** – basic GameShark / PAR v1/v3 support; hook and ROM-patch codes are skipped
-- **No VMU saves** – filesystem saves only
+- **VMU capacity** – large 128 KiB FLASH saves may not fit on a VMU
 - **No post-processing** – color correction and xBRZ upscaling are disabled (LCD ghosting is enabled only by the Accuracy profile). Gameplay frames use PVR nearest-neighbor 2× scaling; shader-based filters remain unavailable.
 - **Single-threaded** – the emulation loop runs on the main thread
 
@@ -237,7 +263,7 @@ The Dreamcast backend reuses the core emulator library (`nba`) and the platform-
 The Dreamcast SH4 at 200 MHz is significantly slower than modern desktop CPUs. Expect performance challenges with cycle-accurate GBA emulation. Built-in tuning options:
 
 - Performance profile (settings menu)
-- Frame skip (settings menu)
+- Frame skip / Auto frame skip (settings menu)
 - Audio buffer size (settings menu)
 - SH4-specific compiler flags (`-m4-single-only` is already used)
 
@@ -259,8 +285,8 @@ knobs. Pick the highest-fidelity profile a given game can sustain at full speed.
 - **Speed** – HLE audio bypasses the GBA sound CPU and one skipped frame
   reclaims headroom for the heaviest titles (3D/Mode-7-heavy games).
 
-Switching profiles overwrites Frame skip and Audio buffer; adjust those rows
-afterward to fine-tune within a profile.
+Switching profiles overwrites Frame skip, disables Auto frame skip, and rewrites
+Audio buffer; adjust those rows afterward to fine-tune within a profile.
 
 Large ROMs defaults to **Off** for stock Dreamcast memory budgets. Leave it off
 for retail hardware; enable it only when testing a 32 MB RAM mod or emulator
@@ -270,10 +296,11 @@ configuration known to have the extra memory headroom.
 
 Enable **Show FPS** in settings to overlay the measured display frame rate in
 the top-left corner during play. The reading is averaged once per second by the
-frame limiter. The overlay also shows `PG`, the number of ROM page-cache misses
-since the previous FPS sample. A title running at full speed reports ~59.7 FPS
-(the GBA's native rate); sustained readings below that indicate the SH4 cannot
-keep up at the current profile.
+frame limiter. The overlay also shows `FS`/`FSA` for manual/automatic frame skip
+and `PG`, the number of ROM page-cache misses since the previous FPS sample. A
+title running at full speed reports ~59.7 FPS (the GBA's native rate);
+sustained readings below that indicate the SH4 cannot keep up at the current
+profile.
 
 ### Repeatable Benchmark Workflow
 

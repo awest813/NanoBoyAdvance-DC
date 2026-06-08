@@ -24,6 +24,7 @@
 namespace nba {
 
 using BackupType = Config::BackupType;
+using Result = ROMLoader::Result;
 
 static constexpr size_t kMaxROMSize = 32 * 1024 * 1024; // 32 MiB
 static constexpr size_t kHeaderChecksumStart = 0xA0;
@@ -393,7 +394,7 @@ auto ROMLoader::Load(
       return Result::CannotOpenFile;
     }
 
-    const auto resolved_path = ResolveDreamcastVirtualPath(load_path);
+    auto resolved_path = ResolveDreamcastVirtualPath(load_path);
     size_t size = 0;
     DreamcastLoaderTrace("7B stat begin", rom_path);
     auto size_status = GetFileSize(rom_path, size);
@@ -562,7 +563,7 @@ auto ROMLoader::Load(
     const auto page_count = DreamcastPagedROMPageCount(size);
     DreamcastLoaderTrace("7J paged attach begin", rom_path, size);
     core->Attach(ROM{
-      resolved_path,
+      std::move(resolved_path),
       size,
       std::move(backup),
       std::move(gpio),

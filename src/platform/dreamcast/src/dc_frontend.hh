@@ -40,7 +40,7 @@ struct DCSettingsMenu {
     DCUI& ui,
     DCInput& input,
     DreamcastConfig& config
-  ) -> void;
+  ) -> bool;
 };
 
 } // namespace nba

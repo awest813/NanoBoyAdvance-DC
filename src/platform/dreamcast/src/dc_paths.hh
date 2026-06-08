@@ -6,12 +6,34 @@
 #include "dc_config.hh"
 
 #include <algorithm>
+#include <cerrno>
+#include <cstdint>
+#include <cstdio>
 #include <filesystem>
 #include <sys/stat.h>
 
 namespace fs = std::filesystem;
 
 namespace nba {
+
+inline auto IsVMUSaveFolder(std::string const& path) -> bool {
+  return path.rfind("/vmu/", 0) == 0;
+}
+
+inline auto BuildVMUSaveFilename(fs::path const& rom_path) -> std::string {
+  // VMU filenames are short; use a stable hash of the display stem so saves
+  // remain per-ROM without depending on long filenames or extensions.
+  const auto stem = rom_path.stem().string();
+  std::uint32_t hash = 2166136261u;
+  for(unsigned char character : stem) {
+    hash ^= character;
+    hash *= 16777619u;
+  }
+
+  char filename[12];
+  std::snprintf(filename, sizeof(filename), "NBA%08lX", static_cast<unsigned long>(hash));
+  return filename;
+}
 
 inline auto EnsureDirectory(fs::path const& path) -> bool {
   if(path.empty()) {
@@ -26,8 +48,8 @@ inline auto EnsureDirectory(fs::path const& path) -> bool {
   return fs::create_directories(path, error);
 }
 
-// POSIX mkdir-based directory creator for Dreamcast /pc/ and /cd/ paths where
-// std::filesystem may not work correctly through the KOS virtual filesystem.
+// POSIX mkdir-based directory creator for Dreamcast virtual paths where
+// std::filesystem may not work correctly through KOS filesystem drivers.
 // Returns true if the directory exists or was created successfully.
 inline auto EnsureDirectoryPOSIX(std::string const& path) -> bool {
   if(path.empty()) {
@@ -62,6 +84,10 @@ inline auto GetSavePath(DreamcastConfig const& config, fs::path const& rom_path)
   const auto stem = rom_path.stem().string();
 
   if(!config.save_folder.empty()) {
+    if(IsVMUSaveFolder(config.save_folder)) {
+      return fs::path{config.save_folder} / BuildVMUSaveFilename(rom_path);
+    }
+
     return fs::path{config.save_folder} / (stem + ".sav");
   }
 

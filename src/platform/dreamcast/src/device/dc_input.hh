@@ -14,6 +14,13 @@
 #define NBA_DC_HAS_KOS 0
 #endif
 
+#if defined(NBA_DC_ENABLE_SDL_MENU) && !NBA_DC_HAS_KOS && __has_include(<SDL3/SDL.h>)
+#define NBA_DC_HAS_SDL_MENU 1
+#include <SDL3/SDL.h>
+#else
+#define NBA_DC_HAS_SDL_MENU 0
+#endif
+
 namespace nba {
 
 struct DCGameplayRequest {
@@ -59,16 +66,16 @@ private:
   auto ReadControllerState() -> cont_state_t*;
   auto ButtonPressed(uint32 current, uint32 previous, uint32 mask) -> bool;
 
-  uint32 previous_buttons_ = 0xFFFF;
-  int8 previous_joyx_ = 0;
-  int8 previous_joyy_ = 0;
+  u32 previous_buttons_ = 0xFFFF;
+  s8 previous_joyx_ = 0;
+  s8 previous_joyy_ = 0;
 #endif
 
   int exit_combo_frames_ = 0;
   int save_state_cooldown_ = 0;
   int load_state_cooldown_ = 0;
   int pause_menu_frames_ = 0;
-  uint32 previous_shoulder_combo_ = 0;
+  u32 previous_shoulder_combo_ = 0;
 };
 
 } // namespace nba

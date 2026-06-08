@@ -89,6 +89,45 @@ static auto FormatROMSize(size_t size) -> std::string {
   return message;
 }
 
+static auto UpdateAutoFrameSkip(
+  DreamcastConfig& config,
+  float measured_fps,
+  int current_frame_skip,
+  int& recovery_ticks
+) -> int {
+  if(!config.auto_frame_skip || measured_fps <= 0.0f) {
+    recovery_ticks = 0;
+    return config.frame_skip;
+  }
+
+  int next_frame_skip = current_frame_skip;
+  if(measured_fps < 53.0f && current_frame_skip < 3) {
+    next_frame_skip++;
+    recovery_ticks = 0;
+  } else if(measured_fps > 58.5f && current_frame_skip > 0) {
+    recovery_ticks++;
+    if(recovery_ticks >= 5) {
+      next_frame_skip--;
+      recovery_ticks = 0;
+    }
+  } else {
+    recovery_ticks = 0;
+  }
+
+  if(next_frame_skip != current_frame_skip) {
+    std::printf(
+      "[NBA-DC] Auto frame skip: %d -> %d (FPS %.1f)\n",
+      current_frame_skip,
+      next_frame_skip,
+      static_cast<double>(measured_fps)
+    );
+    std::fflush(stdout);
+  }
+
+  config.frame_skip = std::clamp(next_frame_skip, 0, 3);
+  return config.frame_skip;
+}
+
 static auto ResolveAutobootROMPath(DreamcastConfig const& config, std::string& report) -> fs::path {
   report.clear();
 
@@ -274,7 +313,7 @@ static auto LoadEmulator(
 #if NBA_DC_HAS_KOS
   if(IsDreamcastVirtualPath(rom_path)) {
     std::string phase2_detail = FormatROMSize(rom_size);
-#if NBA_DC_HAS_ARCH
+#if NBA_DC_VFS_HAS_ARCH
     phase2_detail += HasExtendedRAM() ? "\nSystem RAM: 32 MB" : "\nSystem RAM: 16 MB";
 #endif
     breadcrumb("Phase 2: ROM size precheck", phase2_detail);
@@ -302,7 +341,7 @@ static auto LoadEmulator(
   {
     const auto save_dir = save_path.parent_path().string();
     if(!save_dir.empty()) {
-      const bool dir_ok = EnsureDirectoryPOSIX(save_dir);
+      const bool dir_ok = IsVMUSaveFolder(save_dir) || EnsureDirectoryPOSIX(save_dir);
       breadcrumb("Phase 3: Save path",
                  save_path.string() + (dir_ok ? " [dir ok]" : " [dir failed]"));
     } else {
@@ -386,6 +425,8 @@ static auto LoadEmulator(
   u32 measured_page_misses = 0;
   std::string gameplay_overlay;
   int gameplay_overlay_frames = 0;
+  int active_frame_skip = config->frame_skip;
+  int auto_frame_skip_recovery_ticks = 0;
 #if NBA_DC_HAS_KOS
   int fps_frame_count = 0;
   auto fps_last_update = std::chrono::steady_clock::now();
@@ -420,7 +461,11 @@ static auto LoadEmulator(
         if(menu_action == DCGameplayMenu::Action::ExitToBrowser) {
           running = false;
         }
+#if !NBA_DC_HAS_KOS
+        return;
+#else
         continue;
+#endif
       }
 
       if(gameplay_request.save_slot_delta != 0) {
@@ -446,7 +491,7 @@ static auto LoadEmulator(
       if(running) {
         cheats.Apply(*core);
 
-        for(int skip = 0; skip <= config->frame_skip; skip++) {
+        for(int skip = 0; skip <= active_frame_skip; skip++) {
           core->RunForOneFrame();
           if(core->GetROM().HasReadError()) {
             rom_read_failed = true;
@@ -477,6 +522,12 @@ static auto LoadEmulator(
         if(elapsed_ms >= 1000) {
           measured_fps = fps_frame_count * 1000.0f / static_cast<float>(elapsed_ms);
           measured_page_misses = core->GetROM().TakePageMissCount();
+          active_frame_skip = UpdateAutoFrameSkip(
+            *config,
+            measured_fps,
+            active_frame_skip,
+            auto_frame_skip_recovery_ticks
+          );
           fps_frame_count = 0;
           fps_last_update = now;
           std::printf(
@@ -491,6 +542,12 @@ static auto LoadEmulator(
     }, [&](float fps) {
       measured_fps = fps;
       measured_page_misses = core->GetROM().TakePageMissCount();
+      active_frame_skip = UpdateAutoFrameSkip(
+        *config,
+        measured_fps,
+        active_frame_skip,
+        auto_frame_skip_recovery_ticks
+      );
       std::printf(
         "[NBA-DC] Runtime: FPS %.1f, ROM page misses %lu\n",
         static_cast<double>(measured_fps),
@@ -509,12 +566,14 @@ static auto LoadEmulator(
 
     if(config->show_fps) {
       // Fixed width keeps stale digits from lingering as the value changes.
-      char fps_text[40];
+      char fps_text[48];
       std::snprintf(
         fps_text,
         sizeof(fps_text),
-        "FPS %5.1f PG %3lu",
+        "FPS %5.1f FS %s%d PG %3lu",
         static_cast<double>(measured_fps),
+        config->auto_frame_skip ? "A" : "",
+        active_frame_skip,
         static_cast<unsigned long>(measured_page_misses)
       );
       video_device->DrawText(8, 8, fps_text);

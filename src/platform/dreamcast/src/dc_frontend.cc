@@ -42,6 +42,10 @@ auto AllowLargeRomsLabel(DreamcastConfig const& config) -> std::string {
 }
 
 auto FrameSkipLabel(DreamcastConfig const& config) -> std::string {
+  if(config.auto_frame_skip) {
+    return std::string{"Auto ("} + std::to_string(config.frame_skip) + ")";
+  }
+
   return std::to_string(config.frame_skip);
 }
 
@@ -84,7 +88,12 @@ void AdjustAllowLargeRoms(DreamcastConfig& config, int direction) {
 }
 
 void AdjustFrameSkip(DreamcastConfig& config, int direction) {
-  config.frame_skip = std::clamp(config.frame_skip + direction, 0, 3);
+  const int current_index = config.auto_frame_skip ? 0 : config.frame_skip + 1;
+  const int next_index = std::clamp(current_index + direction, 0, 4);
+  config.auto_frame_skip = next_index == 0;
+  if(!config.auto_frame_skip) {
+    config.frame_skip = next_index - 1;
+  }
 }
 
 void AdjustAudioBuffer(DreamcastConfig& config, int direction) {
@@ -116,7 +125,7 @@ void AdjustROMFolder(DreamcastConfig& config, int direction) {
 }
 
 void AdjustSaveFolder(DreamcastConfig& config, int direction) {
-  static constexpr std::array<const char*, 2> kPaths{"/pc/saves", "/pc"};
+  static constexpr std::array<const char*, 3> kPaths{"/pc/saves", "/pc", "/vmu/a1"};
   const auto current = std::find(kPaths.begin(), kPaths.end(), config.save_folder);
   int index = current == kPaths.end() ? 0 : static_cast<int>(current - kPaths.begin());
   index = (index + direction + static_cast<int>(kPaths.size())) % static_cast<int>(kPaths.size());
@@ -151,7 +160,8 @@ auto DCSettingsMenu::Run(
   DCUI& ui,
   DCInput& input,
   DreamcastConfig& config
-) -> void {
+) -> bool {
+  DreamcastConfig draft = config;
   int selection = 0;
   const int item_count = static_cast<int>(std::size(kSettings));
 
@@ -160,11 +170,17 @@ auto DCSettingsMenu::Run(
     items.reserve(item_count + 1);
 
     for(auto const& setting : kSettings) {
-      items.push_back(std::string{setting.label} + ": " + setting.getter(config));
+      items.push_back(std::string{setting.label} + ": " + setting.getter(draft));
     }
     items.emplace_back("Save and return");
 
-    ui.DrawMenu("Settings", items, selection, 0);
+    ui.DrawMenu(
+      "Settings",
+      items,
+      selection,
+      0,
+      "Left/Right=Adjust  A=Save on last row  B=Cancel"
+    );
 
     DCMenuInput menu;
     input.PollMenu(menu);
@@ -174,16 +190,17 @@ auto DCSettingsMenu::Run(
     } else if(menu.down) {
       selection = (selection + 1) % (item_count + 1);
     } else if(menu.left && selection < item_count) {
-      kSettings[selection].adjust(config, -1);
+      kSettings[selection].adjust(draft, -1);
     } else if(menu.right && selection < item_count) {
-      kSettings[selection].adjust(config, 1);
+      kSettings[selection].adjust(draft, 1);
     } else if(menu.confirm) {
       if(selection == item_count) {
+        config = draft;
         config.SaveDreamcast(DreamcastConfig::kDefaultConfigPath);
-        return;
+        return true;
       }
     } else if(menu.cancel) {
-      return;
+      return false;
     }
 
 #if NBA_DC_HAS_KOS
@@ -201,7 +218,8 @@ auto DCFrontend::Run(
   if(entries.empty()) {
     ui.ShowMessage(
       "No ROMs Found",
-      "Place .gba files in /pc/roms\nor on the disc root (/cd).\n\nPress Start to open settings.",
+      "Place .gba files in /pc/roms\nor on the disc root (/cd).\n\n"
+      "Press Start/Y for settings.\nPress B to return to loader.",
       input,
       false
     );
@@ -210,11 +228,32 @@ auto DCFrontend::Run(
       DCMenuInput menu;
       input.PollMenu(menu);
       if(menu.start) {
-        DCSettingsMenu::Run(ui, input, config);
-        return Result{Action::OpenSettings, {}};
+        if(DCSettingsMenu::Run(ui, input, config)) {
+          return Result{Action::OpenSettings, {}};
+        }
+
+        ui.ShowMessage(
+          "No ROMs Found",
+          "Place .gba files in /pc/roms\nor on the disc root (/cd).\n\n"
+          "Press Start/Y for settings.\nPress B to return to loader.",
+          input,
+          false
+        );
       }
       if(menu.settings) {
-        DCSettingsMenu::Run(ui, input, config);
+        if(DCSettingsMenu::Run(ui, input, config)) {
+          return Result{Action::OpenSettings, {}};
+        }
+        ui.ShowMessage(
+          "No ROMs Found",
+          "Place .gba files in /pc/roms\nor on the disc root (/cd).\n\n"
+          "Press Start/Y for settings.\nPress B to return to loader.",
+          input,
+          false
+        );
+      }
+      if(menu.cancel) {
+        return Result{Action::ReturnToLoader, {}};
       }
 
 #if NBA_DC_HAS_KOS
@@ -239,7 +278,13 @@ auto DCFrontend::Run(
   static constexpr int kVisibleRows = 10;
 
   while(true) {
-    ui.DrawMenu("Select ROM", menu_items, selection, scroll_offset);
+    ui.DrawMenu(
+      "Select ROM",
+      menu_items,
+      selection,
+      scroll_offset,
+      "A=Launch  B=Loader  Y=Settings  Start=Loader"
+    );
 
     DCMenuInput menu;
     input.PollMenu(menu);
@@ -264,8 +309,9 @@ auto DCFrontend::Run(
       config.last_rom = entry.path.string();
       return Result{Action::LaunchROM, entry.path};
     } else if(menu.settings) {
-      DCSettingsMenu::Run(ui, input, config);
-      return Result{Action::OpenSettings, {}};
+      if(DCSettingsMenu::Run(ui, input, config)) {
+        return Result{Action::OpenSettings, {}};
+      }
     } else if(menu.start) {
       return Result{Action::ReturnToLoader, {}};
     } else if(menu.cancel) {
