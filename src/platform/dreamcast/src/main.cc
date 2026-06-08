@@ -6,12 +6,12 @@
 #include <nba/core.hh>
 #include <platform/loader/bios.hh>
 #include <platform/loader/rom.hh>
-#include <platform/loader/save_state.hh>
-#include <platform/writer/save_state.hh>
 #include <platform/frame_limiter.hh>
 
+#include "dc_cheats.hh"
 #include "dc_config.hh"
 #include "dc_frontend.hh"
+#include "dc_gameplay_menu.hh"
 #include "dc_memory.hh"
 #include "dc_paths.hh"
 #include "dc_rom_browser.hh"
@@ -373,6 +373,9 @@ static auto LoadEmulator(
 
   breadcrumb("Phase 8: Core reset");
   core->Reset();
+
+  DCCheatDatabase cheats;
+  cheats.LoadForROM(rom_path);
   breadcrumb("Phase 9: Enter frame loop");
 
   bool running = true;
@@ -402,6 +405,22 @@ static auto LoadEmulator(
 #endif
       }
 
+      if(gameplay_request.open_pause_menu) {
+        input.ClearKeys(*core);
+        const auto menu_action = DCGameplayMenu::Run(
+          ui,
+          input,
+          *config,
+          core,
+          cheats,
+          rom_path
+        );
+        if(menu_action == DCGameplayMenu::Action::ExitToBrowser) {
+          running = false;
+        }
+        continue;
+      }
+
       if(gameplay_request.save_slot_delta != 0) {
         config->save_state_slot = std::clamp(
           config->save_state_slot + gameplay_request.save_slot_delta,
@@ -415,41 +434,16 @@ static auto LoadEmulator(
       }
 
       if(gameplay_request.save_state) {
-        const auto state_path = GetSaveStatePath(*config, rom_path, config->save_state_slot);
-        const auto state_dir = state_path.parent_path().string();
-        if(!state_dir.empty()) {
-          EnsureDirectoryPOSIX(state_dir);
-        }
-
-        const auto result = SaveStateWriter::Write(core, state_path);
-        char slot_text[48];
-        std::snprintf(
-          slot_text,
-          sizeof(slot_text),
-          result == SaveStateWriter::Result::Success
-            ? "Saved state slot %d"
-            : "Save state failed",
-          config->save_state_slot
-        );
-        gameplay_overlay = slot_text;
+        gameplay_overlay = DCGameplayMenu::SaveState(core, *config, rom_path);
         gameplay_overlay_frames = 90;
       } else if(gameplay_request.load_state) {
-        const auto state_path = GetSaveStatePath(*config, rom_path, config->save_state_slot);
-        const auto result = SaveStateLoader::Load(core, state_path);
-        char slot_text[48];
-        std::snprintf(
-          slot_text,
-          sizeof(slot_text),
-          result == SaveStateLoader::Result::Success
-            ? "Loaded state slot %d"
-            : "Load state failed",
-          config->save_state_slot
-        );
-        gameplay_overlay = slot_text;
+        gameplay_overlay = DCGameplayMenu::LoadState(core, *config, rom_path);
         gameplay_overlay_frames = 90;
       }
 
       if(running) {
+        cheats.Apply(*core);
+
         for(int skip = 0; skip <= config->frame_skip; skip++) {
           core->RunForOneFrame();
           if(core->GetROM().HasReadError()) {

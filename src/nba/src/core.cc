@@ -257,6 +257,30 @@ auto Core::PeekWordIO(u32 address) -> u32 {
   return bus.hw.ReadWord(address);
 }
 
+auto Core::PeekByte(u32 address) -> u8 {
+  return bus.ReadByte(address, Bus::Nonsequential);
+}
+
+auto Core::PeekHalf(u32 address) -> u16 {
+  return bus.ReadHalf(address, Bus::Nonsequential);
+}
+
+auto Core::PeekWord(u32 address) -> u32 {
+  return bus.ReadWord(address, Bus::Nonsequential);
+}
+
+void Core::PokeByte(u32 address, u8 value) {
+  bus.WriteByte(address, value, Bus::Nonsequential);
+}
+
+void Core::PokeHalf(u32 address, u16 value) {
+  bus.WriteHalf(address, value, Bus::Nonsequential);
+}
+
+void Core::PokeWord(u32 address, u32 value) {
+  bus.WriteWord(address, value, Bus::Nonsequential);
+}
+
 auto Core::GetBGHOFS(int id) -> u16 {
   return ppu.mmio.bghofs[id];
 }

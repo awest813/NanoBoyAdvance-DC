@@ -53,6 +53,12 @@ struct CoreBase {
   virtual auto PeekByteIO(u32 address) -> u8  = 0;
   virtual auto PeekHalfIO(u32 address) -> u16 = 0;
   virtual auto PeekWordIO(u32 address) -> u32 = 0;
+  virtual auto PeekByte(u32 address) -> u8 = 0;
+  virtual auto PeekHalf(u32 address) -> u16 = 0;
+  virtual auto PeekWord(u32 address) -> u32 = 0;
+  virtual void PokeByte(u32 address, u8 value) = 0;
+  virtual void PokeHalf(u32 address, u16 value) = 0;
+  virtual void PokeWord(u32 address, u32 value) = 0;
   virtual auto GetBGHOFS(int id) -> u16 = 0;
   virtual auto GetBGVOFS(int id) -> u16 = 0;
 

@@ -52,6 +52,7 @@ auto DCInput::PollInput(CoreBase& core, DCGameplayRequest& request) -> bool {
   if(!state || IsInvalidControllerState(state)) {
     ClearKeys(core);
     exit_combo_frames_ = 0;
+    pause_menu_frames_ = 0;
     previous_shoulder_combo_ = 0;
     return false;
   }
@@ -76,8 +77,19 @@ auto DCInput::PollInput(CoreBase& core, DCGameplayRequest& request) -> bool {
   const uint32 exit_combo = CONT_START | CONT_A | CONT_B | CONT_X | CONT_Y;
   if((state->buttons & exit_combo) == exit_combo) {
     exit_combo_frames_++;
+    pause_menu_frames_ = 0;
   } else {
     exit_combo_frames_ = 0;
+  }
+
+  const uint32 pause_combo = CONT_START | CONT_B;
+  if((state->buttons & pause_combo) == pause_combo && exit_combo_frames_ == 0) {
+    pause_menu_frames_++;
+    if(pause_menu_frames_ == kPauseMenuDebounceFrames) {
+      request.open_pause_menu = true;
+    }
+  } else if((state->buttons & pause_combo) != pause_combo) {
+    pause_menu_frames_ = 0;
   }
 
   // gpSPDC-style shoulder shortcuts: hold GBA L+R (Dreamcast X+Y) with Start

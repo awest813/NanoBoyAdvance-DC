@@ -9,6 +9,8 @@ set(SOURCES
   src/dc_ui.cc
   src/dc_rom_browser.cc
   src/dc_frontend.cc
+  src/dc_cheats.cc
+  src/dc_gameplay_menu.cc
   src/main.cc
   src/open_bios.cc
   src/romdisk_stub.c
@@ -24,6 +26,8 @@ set(HEADERS
   src/dc_ui.hh
   src/dc_rom_browser.hh
   src/dc_frontend.hh
+  src/dc_cheats.hh
+  src/dc_gameplay_menu.hh
 )
 
 add_executable(NanoBoyAdvance-DC)

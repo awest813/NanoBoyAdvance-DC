@@ -87,6 +87,8 @@ without full-ROM allocations or undefined behavior after media failures.
 - [x] Add gameplay save-state hotkeys (10 slots under `/pc/states`, gpSPDC-style
   L+R+Start/Select shortcuts).
 - [x] Scan gpSPDC-style `/cd/gbaDC` and accept `.bin`/`.zip` ROMs in the browser.
+- [x] Add in-game pause menu (Start+B) with save/load/slot/cheat controls.
+- [x] Load gpSP-compatible `.cht` cheat files and apply enabled codes each frame.
 - [x] Improve save UX for in-memory-only sessions: attempt a clean full-buffer
   save flush on exit when streaming writes were unavailable, and tell the user
   whether their progress was persisted.
