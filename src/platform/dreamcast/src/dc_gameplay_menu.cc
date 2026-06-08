@@ -26,9 +26,56 @@ enum class PauseRow {
   LoadState,
   StateSlot,
   Cheats,
+  Controls,
+  Reset,
   ExitToBrowser,
   Count
 };
+
+// Modal yes/no prompt used for actions that discard progress (reset, exit).
+// Defaults the selection to "No" so a stray A press cannot drop the session.
+auto ConfirmAction(
+  DCUI& ui,
+  DCInput& input,
+  std::string_view title,
+  std::string_view prompt
+) -> bool {
+  std::vector<std::string> items{"No", "Yes"};
+  int selection = 0;
+
+  while(true) {
+    ui.DrawMenu(title, items, selection, 0, prompt);
+
+    DCMenuInput menu;
+    input.PollMenu(menu);
+
+    if(menu.up || menu.down) {
+      selection ^= 1;
+    } else if(menu.confirm) {
+      return selection == 1;
+    } else if(menu.cancel) {
+      return false;
+    }
+
+#if NBA_DC_HAS_KOS
+    vid_waitvbl();
+#endif
+  }
+}
+
+auto ShowControlsHelp(DCUI& ui, DCInput& input) -> void {
+  ui.ShowMessage(
+    "Controls",
+    "In-game shortcuts:\n\n"
+    "Start + B        Pause menu\n"
+    "X + Y + Start    Quick save\n"
+    "X + Y + Select   Quick load\n"
+    "X + Y + Left/Right  Change slot\n"
+    "Start+A+B+X+Y   Exit (hold)",
+    input,
+    true
+  );
+}
 
 auto SaveStateMessage(
   std::unique_ptr<CoreBase>& core,
@@ -163,6 +210,8 @@ auto BuildPauseMenuItems(
     items.emplace_back("Cheats");
   }
 
+  items.emplace_back("Controls");
+  items.emplace_back("Reset game");
   items.emplace_back("Exit to browser");
   return items;
 }
@@ -249,8 +298,33 @@ auto DCGameplayMenu::Run(
           RunCheatMenu(ui, input, cheats);
           break;
 
+        case PauseRow::Controls:
+          ShowControlsHelp(ui, input);
+          break;
+
+        case PauseRow::Reset:
+          if(ConfirmAction(
+              ui,
+              input,
+              "Reset game?",
+              "Unsaved progress is lost  A=Confirm  B=Cancel"
+          )) {
+            core->Reset();
+            status_message = "Game reset";
+            status_frames = 90;
+          }
+          break;
+
         case PauseRow::ExitToBrowser:
-          return Action::ExitToBrowser;
+          if(ConfirmAction(
+              ui,
+              input,
+              "Exit to browser?",
+              "Saves are flushed on exit  A=Confirm  B=Cancel"
+          )) {
+            return Action::ExitToBrowser;
+          }
+          break;
 
         case PauseRow::Count:
           break;
