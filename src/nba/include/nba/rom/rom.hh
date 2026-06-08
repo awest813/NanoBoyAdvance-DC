@@ -517,7 +517,70 @@ private:
     target->start = page_start;
     target->last_used = rom_page_clock;
     target->valid = true;
+
+    if(page_start + kPageSize < rom_size) {
+      PrefetchPagedROM(page_start + kPageSize);
+    }
+
     return target;
+  }
+
+  void PrefetchPagedROM(u32 address) {
+    if(!rom_file || address >= rom_size) {
+      return;
+    }
+
+    const auto page_start = address & ~(u32(kPageSize) - 1);
+    const size_t active_pages = ActivePageCount();
+
+    for(size_t page_index = 0; page_index < active_pages; page_index++) {
+      auto& page = rom_pages[page_index];
+      if(page.valid && page.start == page_start) {
+        return;
+      }
+    }
+
+    auto* target = &rom_pages[0];
+    for(size_t page_index = 0; page_index < active_pages; page_index++) {
+      auto& page = rom_pages[page_index];
+      if(!page.valid) {
+        target = &page;
+        break;
+      }
+
+      if(page.last_used < target->last_used) {
+        target = &page;
+      }
+    }
+
+    size_t bytes_to_read = kPageSize;
+    if(page_start + bytes_to_read > rom_size) {
+      bytes_to_read = rom_size - page_start;
+    }
+
+    if(target->data.empty()) {
+      target->data.resize(kPageSize);
+    }
+
+    if(std::fseek(rom_file, static_cast<long>(page_start), SEEK_SET) != 0) {
+      return;
+    }
+
+    const auto bytes_read = std::fread(target->data.data(), 1, bytes_to_read, rom_file);
+
+    if(bytes_read < bytes_to_read) {
+      if(page_start + bytes_to_read < rom_size) {
+        return;
+      }
+
+      std::memset(target->data.data() + bytes_read, 0, kPageSize - bytes_read);
+    } else if(bytes_read < kPageSize) {
+      std::memset(target->data.data() + bytes_read, 0, kPageSize - bytes_read);
+    }
+
+    target->start = page_start;
+    target->last_used = rom_page_clock;
+    target->valid = true;
   }
 
   auto ReadPaged8(u32 address) -> u8 {

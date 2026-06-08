@@ -6,7 +6,9 @@
 #include <nba/rom/backup/sram.hh>
 #include <nba/rom/header.hh>
 #include <nba/rom/rom.hh>
+#include <platform/loader/dc_idle_config.hh>
 #include <platform/loader/dc_virtual_fs.hh>
+#include <platform/loader/dc_zip_rom.hh>
 #include <platform/loader/rom.hh>
 #include <atom/logger/logger.hh>
 #include <unarr.h>
@@ -15,6 +17,7 @@
 #include <filesystem>
 #include <fstream>
 #include <cstddef>
+#include <cstring>
 #include <string_view>
 #include <utility>
 
@@ -78,6 +81,29 @@ static auto ReadROMArchiveStream(ar_stream* stream, std::vector<u8>& file_data) 
 }
 
 static auto ReadDreamcastArchive(fs::path const& path, std::vector<u8>& file_data) -> Result {
+  if(IsDreamcastZipROM(path)) {
+    fs::path resolved_path;
+    if(!ResolveDreamcastZipROM(path, resolved_path)) {
+      return Result::CannotOpenFile;
+    }
+
+    size_t size = 0;
+    if(!GetDreamcastVirtualFileSize(resolved_path, size, kMaxROMSize)) {
+      return Result::CannotOpenFile;
+    }
+
+    auto* file = OpenDreamcastVirtualFile(resolved_path);
+    if(!file) {
+      return Result::CannotOpenFile;
+    }
+
+    file_data.resize(size);
+    const auto read = std::fread(file_data.data(), 1, file_data.size(), file);
+    std::fclose(file);
+
+    return read == file_data.size() ? Result::Success : Result::CannotOpenFile;
+  }
+
   size_t archive_size = 0;
   if(!GetDreamcastVirtualFileSize(path, archive_size, kMaxROMSize)) {
     return Result::CannotOpenFile;
@@ -107,6 +133,10 @@ static auto ReadDreamcastArchive(fs::path const& path, std::vector<u8>& file_dat
 }
 
 static auto GetDreamcastArchiveROMSize(fs::path const& path, size_t& rom_size) -> bool {
+  if(IsDreamcastZipROM(path)) {
+    return GetDreamcastZipROMSize(path, rom_size);
+  }
+
   rom_size = 0;
 
   size_t archive_size = 0;
@@ -158,6 +188,15 @@ static auto GetDreamcastArchiveROMSize(fs::path const& path, size_t& rom_size) -
 
   ar_close(stream);
   return found;
+}
+
+static auto ResolveDreamcastLoadPath(fs::path const& path, fs::path& load_path) -> bool {
+  if(IsDreamcastZipROM(path)) {
+    return ResolveDreamcastZipROM(path, load_path);
+  }
+
+  load_path = path;
+  return true;
 }
 
 static void DreamcastLoaderTrace(char const* phase, fs::path const& path, size_t size = 0) {
@@ -282,6 +321,19 @@ static auto ParseROMHeader(std::vector<u8> const& file_data) -> ParsedROMHeader 
   return info;
 }
 
+static void ApplyDreamcastIdleTuning(Config* tuning_config, ParsedROMHeader const& header_info) {
+  if(tuning_config == nullptr) {
+    return;
+  }
+
+  Header header {};
+  std::memcpy(header.game.code, header_info.code.c_str(),
+              std::min(header_info.code.size(), sizeof(header.game.code)));
+  std::memcpy(header.game.maker, header_info.maker.c_str(),
+              std::min(header_info.maker.size(), sizeof(header.game.maker)));
+  DreamcastIdleConfig::ApplyTo(*tuning_config, header);
+}
+
 static void TraceROMHeader(ParsedROMHeader const& info, fs::path const& path) {
   std::printf(
     "[NBA-DC] ROM header: %s title='%s' code='%s' maker='%s' unit=0x%02X device=0x%02X version=0x%02X checksum=0x%02X fixed=%s checksum_ok=%s\n",
@@ -330,12 +382,19 @@ auto ROMLoader::Load(
   fs::path const& rom_path,
   fs::path const& save_path,
   BackupType backup_type,
-  GPIODeviceType force_gpio
+  GPIODeviceType force_gpio,
+  Config* tuning_config
 ) -> Result {
 #if defined(PLATFORM_DREAMCAST)
   if(IsDreamcastVirtualPath(rom_path)) {
     DreamcastLoaderTrace("7A enter", rom_path);
-    auto resolved_path = ResolveDreamcastVirtualPath(rom_path);
+    fs::path load_path;
+    if(!ResolveDreamcastLoadPath(rom_path, load_path)) {
+      DreamcastLoaderTrace("7A zip resolve failed", rom_path);
+      return Result::CannotOpenFile;
+    }
+
+    auto resolved_path = ResolveDreamcastVirtualPath(load_path);
     size_t size = 0;
     DreamcastLoaderTrace("7B stat begin", rom_path);
     auto size_status = GetFileSize(rom_path, size);
@@ -374,6 +433,7 @@ auto ROMLoader::Load(
       DreamcastLoaderTrace("7F header parse begin", rom_path, file_data.size());
       auto header_info = ParseROMHeader(file_data);
       TraceROMHeader(header_info, rom_path);
+      ApplyDreamcastIdleTuning(tuning_config, header_info);
       auto game_info = header_info.game_info;
       DreamcastLoaderTrace("7F cartridge info ok", rom_path, file_data.size());
 
@@ -428,7 +488,7 @@ auto ROMLoader::Load(
     }
 
     DreamcastLoaderTrace("7C paged open begin", rom_path, size);
-    auto* file = OpenDreamcastVirtualFile(rom_path);
+    auto* file = OpenDreamcastVirtualFile(load_path);
     if(!file) {
       DreamcastLoaderTrace("7C paged open failed", rom_path, size);
       return Result::CannotOpenFile;
@@ -457,6 +517,7 @@ auto ROMLoader::Load(
     DreamcastLoaderTrace("7F header parse begin", rom_path, header_read);
     auto header_info = ParseROMHeader(header_data);
     TraceROMHeader(header_info, rom_path);
+    ApplyDreamcastIdleTuning(tuning_config, header_info);
     auto game_info = header_info.game_info;
     DreamcastLoaderTrace("7F cartridge info ok", rom_path, header_read);
 

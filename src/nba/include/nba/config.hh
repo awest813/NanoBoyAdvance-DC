@@ -14,6 +14,10 @@ namespace nba {
 struct Config {
   bool skip_bios = false;
 
+  // gpSP-style idle loop address (game_config.txt). When non-zero and the CPU PC
+  // matches, the core halts until the next IRQ instead of spinning the loop.
+  u32 idle_loop_eliminate_target = 0;
+
   enum class BackupType {
     Detect,
     None,
