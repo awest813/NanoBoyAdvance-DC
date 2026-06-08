@@ -26,7 +26,9 @@ namespace nba {
 
 inline auto IsDreamcastVirtualPath(fs::path const& path) -> bool {
   const auto path_string = path.string();
-  return path_string.rfind("/cd/", 0) == 0 || path_string.rfind("/pc/", 0) == 0;
+  return path_string.rfind("/cd/", 0) == 0 ||
+         path_string.rfind("/pc/", 0) == 0 ||
+         path_string.rfind("/vmu/", 0) == 0;
 }
 
 inline auto DreamcastVirtualPathCandidates(fs::path const& path) -> std::vector<std::string> {

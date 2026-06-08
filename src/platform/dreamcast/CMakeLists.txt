@@ -36,6 +36,14 @@ target_sources(NanoBoyAdvance-DC PRIVATE ${SOURCES} ${HEADERS})
 target_include_directories(NanoBoyAdvance-DC PRIVATE src)
 target_link_libraries(NanoBoyAdvance-DC PRIVATE platform-core)
 
+if(NOT CMAKE_CROSSCOMPILING)
+  find_package(SDL3 QUIET COMPONENTS SDL3)
+  if(SDL3_FOUND)
+    target_compile_definitions(NanoBoyAdvance-DC PRIVATE NBA_DC_ENABLE_SDL_MENU=1)
+    target_link_libraries(NanoBoyAdvance-DC PRIVATE SDL3::SDL3)
+  endif()
+endif()
+
 set_target_properties(NanoBoyAdvance-DC PROPERTIES OUTPUT_NAME "NanoBoyAdvance")
 
 install(TARGETS NanoBoyAdvance-DC DESTINATION bin)

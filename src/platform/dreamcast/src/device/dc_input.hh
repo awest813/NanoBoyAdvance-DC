@@ -14,6 +14,13 @@
 #define NBA_DC_HAS_KOS 0
 #endif
 
+#if defined(NBA_DC_ENABLE_SDL_MENU) && !NBA_DC_HAS_KOS && __has_include(<SDL3/SDL.h>)
+#define NBA_DC_HAS_SDL_MENU 1
+#include <SDL3/SDL.h>
+#else
+#define NBA_DC_HAS_SDL_MENU 0
+#endif
+
 namespace nba {
 
 struct DCGameplayRequest {

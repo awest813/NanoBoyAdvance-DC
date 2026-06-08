@@ -81,7 +81,7 @@ without full-ROM allocations or undefined behavior after media failures.
 - [x] Add in-app settings for performance, FPS, large ROMs, frame skip, audio
   buffer, BIOS path, ROM folder, and save folder.
 - [x] Store per-ROM saves under `/pc/saves/<rom>.sav`.
-- [x] Document VMU as out of scope for now.
+- [x] Add VMU A1 save option with VMU-safe short filenames.
 - [ ] Re-enable safe config load/save once Flycast `/pc` behavior is fully
   understood.
 - [x] Add gameplay save-state hotkeys (10 slots under `/pc/states`, gpSPDC-style
@@ -100,6 +100,7 @@ without full-ROM allocations or undefined behavior after media failures.
 
 - [x] Add Accuracy / Balanced / Speed profiles.
 - [x] Add Show FPS overlay.
+- [x] Add Auto frame-skip UI and FPS-driven runtime adjustment.
 - [x] Document benchmark workflow in `DREAMCAST.md`.
 - [ ] Lock the benchmark ROM set in `COMPATIBILITY.md`.
 - [ ] Capture baseline FPS per profile on retail hardware.

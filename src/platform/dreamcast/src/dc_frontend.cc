@@ -42,6 +42,10 @@ auto AllowLargeRomsLabel(DreamcastConfig const& config) -> std::string {
 }
 
 auto FrameSkipLabel(DreamcastConfig const& config) -> std::string {
+  if(config.auto_frame_skip) {
+    return std::string{"Auto ("} + std::to_string(config.frame_skip) + ")";
+  }
+
   return std::to_string(config.frame_skip);
 }
 
@@ -84,7 +88,12 @@ void AdjustAllowLargeRoms(DreamcastConfig& config, int direction) {
 }
 
 void AdjustFrameSkip(DreamcastConfig& config, int direction) {
-  config.frame_skip = std::clamp(config.frame_skip + direction, 0, 3);
+  const int current_index = config.auto_frame_skip ? 0 : config.frame_skip + 1;
+  const int next_index = std::clamp(current_index + direction, 0, 4);
+  config.auto_frame_skip = next_index == 0;
+  if(!config.auto_frame_skip) {
+    config.frame_skip = next_index - 1;
+  }
 }
 
 void AdjustAudioBuffer(DreamcastConfig& config, int direction) {
@@ -116,7 +125,7 @@ void AdjustROMFolder(DreamcastConfig& config, int direction) {
 }
 
 void AdjustSaveFolder(DreamcastConfig& config, int direction) {
-  static constexpr std::array<const char*, 2> kPaths{"/pc/saves", "/pc"};
+  static constexpr std::array<const char*, 3> kPaths{"/pc/saves", "/pc", "/vmu/a1"};
   const auto current = std::find(kPaths.begin(), kPaths.end(), config.save_folder);
   int index = current == kPaths.end() ? 0 : static_cast<int>(current - kPaths.begin());
   index = (index + direction + static_cast<int>(kPaths.size())) % static_cast<int>(kPaths.size());

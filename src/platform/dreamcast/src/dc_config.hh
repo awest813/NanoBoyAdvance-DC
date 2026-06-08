@@ -14,6 +14,7 @@ struct DreamcastConfig : PlatformConfig {
   static constexpr const char* kDefaultBIOSPath = "/cd/bios.bin";
   static constexpr const char* kDefaultROMFolder = "/pc/roms";
   static constexpr const char* kDefaultSaveFolder = "/pc/saves";
+  static constexpr const char* kDefaultVMUSaveFolder = "/vmu/a1";
   static constexpr const char* kDefaultStateFolder = "/pc/states";
   static constexpr int kSaveStateSlotCount = 10;
 
@@ -27,6 +28,7 @@ struct DreamcastConfig : PlatformConfig {
   };
 
   int frame_skip = 0;
+  bool auto_frame_skip = false;
   int audio_buffer_size = 4096;
   bool show_fps = false;
   bool allow_large_roms = false;

@@ -29,9 +29,9 @@ struct BackupFile {
 
 #if defined(PLATFORM_DREAMCAST)
     const auto save_path_string = save_path.string();
-    if(save_path_string.rfind("/pc/", 0) == 0) {
-      // On Dreamcast /pc/ paths std::filesystem and std::fstream are unreliable
-      // through KOS's virtual filesystem; use POSIX fopen/fwrite instead.
+    if(save_path_string.rfind("/pc/", 0) == 0 || save_path_string.rfind("/vmu/", 0) == 0) {
+      // On Dreamcast virtual paths std::filesystem and std::fstream are
+      // unreliable through KOS; use POSIX fopen/fwrite instead.
       file->save_size = static_cast<size_t>(default_size);
       file->memory.reset(new u8[default_size]);
       std::memset(file->memory.get(), 0xFF, default_size);

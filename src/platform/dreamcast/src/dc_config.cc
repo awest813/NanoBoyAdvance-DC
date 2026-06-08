@@ -21,6 +21,7 @@ void DreamcastConfig::ApplyDefaults() {
   video.color = PlatformConfig::Video::Color::No;
   show_fps = false;
   allow_large_roms = false;
+  auto_frame_skip = false;
 
   // The Balanced profile seeds the CPU/audio/video knobs (mp2k HLE,
   // interpolation, frame skip, audio buffer, LCD ghosting).
@@ -29,6 +30,7 @@ void DreamcastConfig::ApplyDefaults() {
 
 void DreamcastConfig::ApplyPerformanceProfile(PerformanceProfile profile) {
   performance_profile = profile;
+  auto_frame_skip = false;
 
   switch(profile) {
     case PerformanceProfile::Accuracy:
@@ -112,7 +114,7 @@ void DreamcastConfig::TryLoadDreamcast(std::string const& path) {
 }
 
 void DreamcastConfig::SaveDreamcast(std::string const& path) {
-  const auto path_string = path.string();
+  const auto path_string = path;
   if(path_string.rfind("/pc/", 0) == 0 || path_string.rfind("/cd/", 0) == 0) {
     const auto data = BuildTomlDocument();
     std::ostringstream stream;
@@ -140,6 +142,7 @@ void DreamcastConfig::LoadCustomData(toml::value const& data) {
     performance_profile
   );
   frame_skip = toml::find_or<int>(dreamcast, "frame_skip", frame_skip);
+  auto_frame_skip = toml::find_or<bool>(dreamcast, "auto_frame_skip", auto_frame_skip);
   audio_buffer_size = toml::find_or<int>(dreamcast, "audio_buffer_size", audio_buffer_size);
   show_fps = toml::find_or<bool>(dreamcast, "show_fps", show_fps);
   allow_large_roms = toml::find_or<bool>(dreamcast, "allow_large_roms", allow_large_roms);
@@ -159,6 +162,7 @@ void DreamcastConfig::LoadCustomData(toml::value const& data) {
 void DreamcastConfig::SaveCustomData(toml::value& data) {
   data["dreamcast"]["performance_profile"] = ProfileName(performance_profile);
   data["dreamcast"]["frame_skip"] = frame_skip;
+  data["dreamcast"]["auto_frame_skip"] = auto_frame_skip;
   data["dreamcast"]["audio_buffer_size"] = audio_buffer_size;
   data["dreamcast"]["show_fps"] = show_fps;
   data["dreamcast"]["allow_large_roms"] = allow_large_roms;

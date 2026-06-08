@@ -22,6 +22,9 @@ DCVideoDevice::~DCVideoDevice() {
 #if NBA_DC_HAS_KOS
   ShutdownPvr();
 #endif
+#if NBA_DC_HAS_SDL_MENU
+  ShutdownSDL();
+#endif
 }
 
 bool DCVideoDevice::Initialize() {
@@ -30,6 +33,8 @@ bool DCVideoDevice::Initialize() {
   vram_base_ = (uint16*)vram_s;
   ClearScreen();
   pvr_ready_ = InitializePvr();
+#elif NBA_DC_HAS_SDL_MENU
+  return InitializeSDL();
 #endif
   return true;
 }
@@ -181,18 +186,109 @@ void DCVideoDevice::DrawSoftwareScaled(u32* buffer) {
 }
 #endif
 
+#if NBA_DC_HAS_SDL_MENU
+bool DCVideoDevice::InitializeSDL() {
+  if(!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
+    return false;
+  }
+
+  sdl_window_ = SDL_CreateWindow(
+    "NanoBoyAdvance Dreamcast Menu",
+    kScreenWidth,
+    kScreenHeight,
+    0
+  );
+  if(!sdl_window_) {
+    ShutdownSDL();
+    return false;
+  }
+
+  sdl_renderer_ = SDL_CreateRenderer(sdl_window_, nullptr);
+  if(!sdl_renderer_) {
+    ShutdownSDL();
+    return false;
+  }
+
+  sdl_texture_ = SDL_CreateTexture(
+    sdl_renderer_,
+    SDL_PIXELFORMAT_RGB565,
+    SDL_TEXTUREACCESS_STREAMING,
+    kScreenWidth,
+    kScreenHeight
+  );
+  if(!sdl_texture_) {
+    ShutdownSDL();
+    return false;
+  }
+
+  ClearScreen();
+  Present();
+  return true;
+}
+
+void DCVideoDevice::ShutdownSDL() {
+  if(sdl_texture_) {
+    SDL_DestroyTexture(sdl_texture_);
+    sdl_texture_ = nullptr;
+  }
+  if(sdl_renderer_) {
+    SDL_DestroyRenderer(sdl_renderer_);
+    sdl_renderer_ = nullptr;
+  }
+  if(sdl_window_) {
+    SDL_DestroyWindow(sdl_window_);
+    sdl_window_ = nullptr;
+  }
+  SDL_QuitSubSystem(SDL_INIT_VIDEO | SDL_INIT_EVENTS);
+}
+
+void DCVideoDevice::PutPixel(int x, int y, uint16 color) {
+  if(x < 0 || x >= kScreenWidth || y < 0 || y >= kScreenHeight) {
+    return;
+  }
+
+  sdl_pixels_[static_cast<size_t>(y) * kScreenWidth + static_cast<size_t>(x)] = color;
+}
+
+void DCVideoDevice::DrawSoftwareScaledSDL(u32* buffer) {
+  if(!buffer) {
+    return;
+  }
+
+  for(int y = 0; y < kGBAHeight; y++) {
+    for(int x = 0; x < kGBAWidth; x++) {
+      const u32 pixel = buffer[y * kGBAWidth + x];
+      const u8 b = (pixel >>  0) & 0xFF;
+      const u8 g = (pixel >>  8) & 0xFF;
+      const u8 r = (pixel >> 16) & 0xFF;
+      const uint16 rgb565 = static_cast<uint16>(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
+
+      for(int sy = 0; sy < kScale; sy++) {
+        for(int sx = 0; sx < kScale; sx++) {
+          PutPixel(kOffsetX + x * kScale + sx, kOffsetY + y * kScale + sy, rgb565);
+        }
+      }
+    }
+  }
+}
+#endif
+
 void DCVideoDevice::ClearScreen() {
 #if NBA_DC_HAS_KOS
   vram_base_ = (uint16*)vram_s;
   if(!vram_base_) return;
   std::memset(vram_base_, 0, kScreenWidth * kScreenHeight * sizeof(uint16));
+#elif NBA_DC_HAS_SDL_MENU
+  std::fill(sdl_pixels_.begin(), sdl_pixels_.end(), 0);
 #endif
 }
 
 void DCVideoDevice::DrawText(int x, int y, std::string_view text) {
+#if NBA_DC_HAS_KOS || NBA_DC_HAS_SDL_MENU
 #if NBA_DC_HAS_KOS
   vram_base_ = (uint16*)vram_s;
   if(!vram_base_) return;
+#endif
 
   const uint16 fg = 0xFFFF;
   const uint16 bg = 0x0000;
@@ -233,7 +329,11 @@ void DCVideoDevice::DrawText(int x, int y, std::string_view text) {
         }
 
         const bool on = (bits >> (7 - col)) & 1;
+#if NBA_DC_HAS_KOS
         vram_base_[dst_y * kScreenWidth + dst_x] = on ? fg : bg;
+#else
+        PutPixel(dst_x, dst_y, on ? fg : bg);
+#endif
       }
     }
     cursor_x += kFontWidth;
@@ -273,6 +373,12 @@ void DCVideoDevice::DrawStatusBar(std::string_view text) {
   for(int x = 0; x < kScreenWidth; x++) {
     vram_base_[kStatusBarY * kScreenWidth + x] = 0x1084;
   }
+#elif NBA_DC_HAS_SDL_MENU
+  for(int y = kStatusBarY; y < kStatusBarY + kLineHeight && y < kScreenHeight; y++) {
+    for(int x = 0; x < kScreenWidth; x++) {
+      PutPixel(x, y, 0x1084);
+    }
+  }
 #endif
 
   DrawText(16, kStatusBarY + 4, text);
@@ -288,6 +394,15 @@ void DCVideoDevice::Present() {
     RenderScaledFramePvr();
   }
   vid_waitvbl();
+#elif NBA_DC_HAS_SDL_MENU
+  if(!sdl_renderer_ || !sdl_texture_) {
+    return;
+  }
+  SDL_UpdateTexture(sdl_texture_, nullptr, sdl_pixels_.data(), kScreenWidth * sizeof(uint16));
+  SDL_SetRenderDrawColor(sdl_renderer_, 0, 0, 0, 255);
+  SDL_RenderClear(sdl_renderer_);
+  SDL_RenderTexture(sdl_renderer_, sdl_texture_, nullptr, nullptr);
+  SDL_RenderPresent(sdl_renderer_);
 #endif
 }
 
@@ -303,6 +418,9 @@ void DCVideoDevice::Draw(u32* buffer) {
   }
 
   DrawSoftwareScaled(buffer);
+#elif NBA_DC_HAS_SDL_MENU
+  DrawSoftwareScaledSDL(buffer);
+  Present();
 #else
   (void)buffer;
 #endif

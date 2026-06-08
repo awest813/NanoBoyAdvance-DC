@@ -5,6 +5,7 @@
 
 #include <nba/device/video_device.hh>
 
+#include <array>
 #include <string_view>
 
 #if defined(PLATFORM_DREAMCAST) && __has_include(<kos.h>)
@@ -13,6 +14,13 @@
 #include <kos.h>
 #else
 #define NBA_DC_HAS_KOS 0
+#endif
+
+#if defined(NBA_DC_ENABLE_SDL_MENU) && !NBA_DC_HAS_KOS && __has_include(<SDL3/SDL.h>)
+#define NBA_DC_HAS_SDL_MENU 1
+#include <SDL3/SDL.h>
+#else
+#define NBA_DC_HAS_SDL_MENU 0
 #endif
 
 namespace nba {
@@ -65,6 +73,18 @@ private:
   pvr_ptr_t texture_vram_ = nullptr;
   alignas(32) uint16 texture_staging_[kTextureStride * kGBAHeight]{};
   pvr_poly_hdr_t poly_hdr_{};
+#endif
+
+#if NBA_DC_HAS_SDL_MENU
+  bool InitializeSDL();
+  void ShutdownSDL();
+  void DrawSoftwareScaledSDL(u32* buffer);
+  void PutPixel(int x, int y, uint16 color);
+
+  SDL_Window* sdl_window_ = nullptr;
+  SDL_Renderer* sdl_renderer_ = nullptr;
+  SDL_Texture* sdl_texture_ = nullptr;
+  std::array<uint16, kScreenWidth * kScreenHeight> sdl_pixels_{};
 #endif
 };
 
