@@ -27,7 +27,7 @@ This fork of NanoBoyAdvance is a **Dreamcast-only port**.
 |---------|--------|-------|
 | Core Emulation | Working | Accurate CPU/PPU emulation |
 | Audio Output | Working | snd_stream output; MP2K HLE disabled |
-| Video Output | Working | PVR framebuffer |
+| Video Output | Working | PVR hardware 2× scaling |
 | Input | Working | Maple controller |
 | Save Files | Partial | Per-ROM saves at `/pc/saves`, no VMU support yet |
 | Save States | Missing | UI not implemented |

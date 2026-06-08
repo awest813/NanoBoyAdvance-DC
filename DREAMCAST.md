@@ -179,7 +179,7 @@ Errors and loading screens show on-screen text with path details. Press Start to
 
 - **No save states** – save state UI is not implemented yet
 - **No VMU saves** – filesystem saves only
-- **No post-processing** – color correction and xBRZ upscaling are disabled (LCD ghosting is enabled only by the Accuracy profile)
+- **No post-processing** – color correction and xBRZ upscaling are disabled (LCD ghosting is enabled only by the Accuracy profile). Gameplay frames use PVR nearest-neighbor 2× scaling; shader-based filters remain unavailable.
 - **Single-threaded** – the emulation loop runs on the main thread
 
 ## Architecture
@@ -195,7 +195,7 @@ src/platform/dreamcast/
     ├── dc_rom_browser.hh/cc       # ROM directory scanning
     ├── dc_paths.hh                # Save path helpers
     └── device/
-        ├── dc_video_device.hh/cc  # PVR framebuffer video output
+        ├── dc_video_device.hh/cc  # PVR hardware-scaled gameplay output
         ├── dc_audio_device.hh/cc  # KOS snd_stream audio output
         └── dc_input.hh/cc         # Maple controller input polling
 ```
