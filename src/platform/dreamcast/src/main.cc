@@ -313,7 +313,7 @@ static auto LoadEmulator(
 #if NBA_DC_HAS_KOS
   if(IsDreamcastVirtualPath(rom_path)) {
     std::string phase2_detail = FormatROMSize(rom_size);
-#if NBA_DC_HAS_ARCH
+#if NBA_DC_VFS_HAS_ARCH
     phase2_detail += HasExtendedRAM() ? "\nSystem RAM: 32 MB" : "\nSystem RAM: 16 MB";
 #endif
     breadcrumb("Phase 2: ROM size precheck", phase2_detail);

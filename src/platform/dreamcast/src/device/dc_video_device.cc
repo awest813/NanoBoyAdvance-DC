@@ -30,7 +30,7 @@ DCVideoDevice::~DCVideoDevice() {
 bool DCVideoDevice::Initialize() {
 #if NBA_DC_HAS_KOS
   vid_set_mode(DM_640x480, PM_RGB565);
-  vram_base_ = (uint16*)vram_s;
+  vram_base_ = (u16*)vram_s;
   ClearScreen();
   pvr_ready_ = InitializePvr();
 #elif NBA_DC_HAS_SDL_MENU
@@ -88,7 +88,7 @@ void DCVideoDevice::ShutdownPvr() {
 
 void DCVideoDevice::ConvertFrameToTexture(u32* buffer) {
   for(int y = 0; y < kGBAHeight; y++) {
-    uint16* row = texture_staging_ + y * kTextureStride;
+    u16* row = texture_staging_ + y * kTextureStride;
     const u32* src = buffer + y * kGBAWidth;
 
     for(int x = 0; x < kGBAWidth; x++) {
@@ -96,10 +96,10 @@ void DCVideoDevice::ConvertFrameToTexture(u32* buffer) {
       const u8 b = (pixel >>  0) & 0xFF;
       const u8 g = (pixel >>  8) & 0xFF;
       const u8 r = (pixel >> 16) & 0xFF;
-      row[x] = static_cast<uint16>(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
+      row[x] = static_cast<u16>(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
     }
 
-    std::memset(row + kGBAWidth, 0, (kTextureStride - kGBAWidth) * sizeof(uint16));
+    std::memset(row + kGBAWidth, 0, (kTextureStride - kGBAWidth) * sizeof(u16));
   }
 
   pvr_txr_load(texture_staging_, texture_vram_, kTextureBytes);
@@ -159,7 +159,7 @@ void DCVideoDevice::RenderScaledFramePvr() {
 }
 
 void DCVideoDevice::DrawSoftwareScaled(u32* buffer) {
-  vram_base_ = (uint16*)vram_s;
+  vram_base_ = (u16*)vram_s;
   if(!vram_base_ || !buffer) {
     return;
   }
@@ -167,7 +167,7 @@ void DCVideoDevice::DrawSoftwareScaled(u32* buffer) {
   for(int y = 0; y < kGBAHeight; y++) {
     for(int sy = 0; sy < kScale; sy++) {
       const int screen_y = kOffsetY + y * kScale + sy;
-      uint16* dst = vram_base_ + screen_y * kScreenWidth + kOffsetX;
+      u16* dst = vram_base_ + screen_y * kScreenWidth + kOffsetX;
 
       for(int x = 0; x < kGBAWidth; x++) {
         const u32 pixel = buffer[y * kGBAWidth + x];
@@ -175,7 +175,7 @@ void DCVideoDevice::DrawSoftwareScaled(u32* buffer) {
         const u8 g = (pixel >>  8) & 0xFF;
         const u8 r = (pixel >> 16) & 0xFF;
 
-        const uint16 rgb565 = static_cast<uint16>(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
+        const u16 rgb565 = static_cast<u16>(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
 
         for(int sx = 0; sx < kScale; sx++) {
           dst[x * kScale + sx] = rgb565;
@@ -242,7 +242,7 @@ void DCVideoDevice::ShutdownSDL() {
   SDL_QuitSubSystem(SDL_INIT_VIDEO | SDL_INIT_EVENTS);
 }
 
-void DCVideoDevice::PutPixel(int x, int y, uint16 color) {
+void DCVideoDevice::PutPixel(int x, int y, u16 color) {
   if(x < 0 || x >= kScreenWidth || y < 0 || y >= kScreenHeight) {
     return;
   }
@@ -261,7 +261,7 @@ void DCVideoDevice::DrawSoftwareScaledSDL(u32* buffer) {
       const u8 b = (pixel >>  0) & 0xFF;
       const u8 g = (pixel >>  8) & 0xFF;
       const u8 r = (pixel >> 16) & 0xFF;
-      const uint16 rgb565 = static_cast<uint16>(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
+      const u16 rgb565 = static_cast<u16>(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
 
       for(int sy = 0; sy < kScale; sy++) {
         for(int sx = 0; sx < kScale; sx++) {
@@ -275,9 +275,9 @@ void DCVideoDevice::DrawSoftwareScaledSDL(u32* buffer) {
 
 void DCVideoDevice::ClearScreen() {
 #if NBA_DC_HAS_KOS
-  vram_base_ = (uint16*)vram_s;
+  vram_base_ = (u16*)vram_s;
   if(!vram_base_) return;
-  std::memset(vram_base_, 0, kScreenWidth * kScreenHeight * sizeof(uint16));
+  std::memset(vram_base_, 0, kScreenWidth * kScreenHeight * sizeof(u16));
 #elif NBA_DC_HAS_SDL_MENU
   std::fill(sdl_pixels_.begin(), sdl_pixels_.end(), 0);
 #endif
@@ -286,12 +286,12 @@ void DCVideoDevice::ClearScreen() {
 void DCVideoDevice::DrawText(int x, int y, std::string_view text) {
 #if NBA_DC_HAS_KOS || NBA_DC_HAS_SDL_MENU
 #if NBA_DC_HAS_KOS
-  vram_base_ = (uint16*)vram_s;
+  vram_base_ = (u16*)vram_s;
   if(!vram_base_) return;
 #endif
 
-  const uint16 fg = 0xFFFF;
-  const uint16 bg = 0x0000;
+  const u16 fg = 0xFFFF;
+  const u16 bg = 0x0000;
 
   int cursor_x = x;
   int cursor_y = y;
@@ -367,7 +367,7 @@ void DCVideoDevice::DrawTextMultiline(int x, int y, std::string_view text) {
 
 void DCVideoDevice::DrawStatusBar(std::string_view text) {
 #if NBA_DC_HAS_KOS
-  vram_base_ = (uint16*)vram_s;
+  vram_base_ = (u16*)vram_s;
   if(!vram_base_) return;
 
   for(int x = 0; x < kScreenWidth; x++) {
@@ -398,7 +398,7 @@ void DCVideoDevice::Present() {
   if(!sdl_renderer_ || !sdl_texture_) {
     return;
   }
-  SDL_UpdateTexture(sdl_texture_, nullptr, sdl_pixels_.data(), kScreenWidth * sizeof(uint16));
+  SDL_UpdateTexture(sdl_texture_, nullptr, sdl_pixels_.data(), kScreenWidth * sizeof(u16));
   SDL_SetRenderDrawColor(sdl_renderer_, 0, 0, 0, 255);
   SDL_RenderClear(sdl_renderer_);
   SDL_RenderTexture(sdl_renderer_, sdl_texture_, nullptr, nullptr);

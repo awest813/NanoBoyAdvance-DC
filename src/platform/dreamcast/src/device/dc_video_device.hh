@@ -58,7 +58,7 @@ private:
   static constexpr int kStatusBarY = 448;
   // PVR stride textures must be a multiple of 32 pixels wide.
   static constexpr int kTextureStride = 256;
-  static constexpr int kTextureBytes = kTextureStride * kGBAHeight * static_cast<int>(sizeof(uint16));
+  static constexpr int kTextureBytes = kTextureStride * kGBAHeight * static_cast<int>(sizeof(u16));
 
 #if NBA_DC_HAS_KOS
   bool InitializePvr();
@@ -67,11 +67,11 @@ private:
   void RenderScaledFramePvr();
   void DrawSoftwareScaled(u32* buffer);
 
-  uint16* vram_base_ = nullptr;
+  u16* vram_base_ = nullptr;
   bool pvr_ready_ = false;
   bool frame_ready_ = false;
   pvr_ptr_t texture_vram_ = nullptr;
-  alignas(32) uint16 texture_staging_[kTextureStride * kGBAHeight]{};
+  alignas(32) u16 texture_staging_[kTextureStride * kGBAHeight]{};
   pvr_poly_hdr_t poly_hdr_{};
 #endif
 
@@ -79,12 +79,12 @@ private:
   bool InitializeSDL();
   void ShutdownSDL();
   void DrawSoftwareScaledSDL(u32* buffer);
-  void PutPixel(int x, int y, uint16 color);
+  void PutPixel(int x, int y, u16 color);
 
   SDL_Window* sdl_window_ = nullptr;
   SDL_Renderer* sdl_renderer_ = nullptr;
   SDL_Texture* sdl_texture_ = nullptr;
-  std::array<uint16, kScreenWidth * kScreenHeight> sdl_pixels_{};
+  std::array<u16, kScreenWidth * kScreenHeight> sdl_pixels_{};
 #endif
 };
 
