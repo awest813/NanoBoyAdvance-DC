@@ -454,9 +454,11 @@ static auto LoadEmulator(
 #if NBA_DC_HAS_KOS
     snd_stream_poll(SND_STREAM_INVALID);
 
+    // Present the PVR-scaled gameplay frame first, then draw overlays into the
+    // letterbox margins so they are not cleared by the next scene render.
+    video_device->Present();
+
     if(config->show_fps) {
-      // Persistent benchmark readout in the top-left margin (outside the
-      // centered GBA frame, so the per-frame blit never overwrites it).
       // Fixed width keeps stale digits from lingering as the value changes.
       char fps_text[40];
       std::snprintf(
@@ -472,8 +474,6 @@ static auto LoadEmulator(
     if(input.IsExitHintActive()) {
       video_device->DrawOverlay("Hold Start+A+B+X+Y to exit");
     }
-
-    video_device->Present();
 #endif
   }
 
