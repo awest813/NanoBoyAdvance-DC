@@ -74,6 +74,8 @@ mkisofs -C 0,11702 -V "NBA_DC" -G IP.BIN -l -o nba-dc.iso cd_root/
 | Save data | `/pc/saves/<rom>.sav` | Per-ROM backup saves (configurable folder) |
 | Save states | `/pc/states/<rom>.ss0`–`.ss9` | 10 slots per ROM (configurable folder) |
 | Cheat files | `<rom>.cht` beside ROM or `/cd/gbaDC/` | gpSP-compatible GameShark / PAR `.cht` |
+| Idle-loop hints | `/cd/gbaDC/game_config.txt`, `/pc/game_config.txt` | gpSP-compatible `idle_loop_eliminate_target` entries |
+| ZIP cache | `/pc/roms/.cache/<stem>.gba` | Extracted ROMs from `.zip` archives (created on first load) |
 | Settings | `/pc/nba-dc.toml` | Frame skip, audio buffer, path overrides |
 
 Writable `/pc` paths require an SD/IDE adapter or equivalent host filesystem mount.
@@ -114,6 +116,16 @@ Writable `/pc` paths require an SD/IDE adapter or equivalent host filesystem mou
   are allowed automatically.
 - The ROM browser shows each cartridge size and marks titles that need the
   Large ROMs setting with `[Large ROMs]`.
+- `.zip` ROMs are opened with [miniz](https://github.com/richgel999/miniz)
+  (public domain) and streamed from disc without buffering the whole archive in
+  RAM.  The inner `.gba`/`.bin` is extracted once to `/pc/roms/.cache/` and
+  then loaded through the same paged-ROM path as a flat file.
+- Optional `game_config.txt` entries (same format as gpSP) can list
+  `idle_loop_eliminate_target` addresses per `game_code`.  When a match is
+  found, the core halts at that PC until the next IRQ instead of burning cycles
+  in the idle loop.
+- After each paged-ROM cache miss, the next 1 MiB page is prefetched when
+  possible to hide sequential CD read latency.
 
 ### Flycast Testing Notes
 

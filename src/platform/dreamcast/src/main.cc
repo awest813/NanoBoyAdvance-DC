@@ -354,7 +354,9 @@ static auto LoadEmulator(
       core,
       rom_path,
       save_path,
-      config->cartridge.backup_type
+      config->cartridge.backup_type,
+      GPIODeviceType::None,
+      config.get()
     );
   } catch(const std::exception& exception) {
     char message[192];

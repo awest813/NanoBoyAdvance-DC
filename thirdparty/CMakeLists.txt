@@ -39,4 +39,8 @@ if(NOT unarr_FOUND)
   add_subdirectory(unarr-1.1.1-patch)
 endif()
 
+if(PLATFORM_DREAMCAST)
+  add_subdirectory(miniz)
+endif()
+
 add_subdirectory(atom-1.0.1)

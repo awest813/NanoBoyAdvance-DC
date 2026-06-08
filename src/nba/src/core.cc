@@ -83,8 +83,19 @@ void Core::Run(int cycles) {
   using HaltControl = Bus::Hardware::HaltControl;
 
   const auto limit = scheduler.GetTimestampNow() + cycles;
+#if defined(PLATFORM_DREAMCAST)
+  const u32 idle_loop_target = config->idle_loop_eliminate_target;
+#endif
 
   while(scheduler.GetTimestampNow() < limit) {
+#if defined(PLATFORM_DREAMCAST)
+    if(idle_loop_target != 0 &&
+       bus.hw.haltcnt == HaltControl::Run &&
+       cpu.state.r15 == idle_loop_target) {
+      bus.hw.haltcnt = HaltControl::Halt;
+    }
+#endif
+
     if(bus.hw.haltcnt == HaltControl::Run) {
       if(cpu.state.r15 == hle_audio_hook) {
         if(auto* sound_info_ptr = bus.GetHostAddress<u32>(0x03007FF0)) {
