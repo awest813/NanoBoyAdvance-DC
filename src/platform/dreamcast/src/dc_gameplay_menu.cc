@@ -78,7 +78,9 @@ auto RunCheatMenu(
   }
 
   int selection = 0;
+  int scroll_offset = 0;
   const int item_count = static_cast<int>(cheats.size());
+  static constexpr int kVisibleRows = 10;
 
   while(true) {
     std::vector<std::string> items;
@@ -101,7 +103,7 @@ auto RunCheatMenu(
     }
     items.emplace_back("Back");
 
-    ui.DrawMenu("Cheats", items, selection, 0);
+    ui.DrawMenu("Cheats", items, selection, scroll_offset, "A/Left/Right=Toggle  B=Back");
 
     DCMenuInput menu;
     input.PollMenu(menu);
@@ -122,6 +124,12 @@ auto RunCheatMenu(
       cheats.Toggle(selection);
     } else if(menu.cancel) {
       return;
+    }
+
+    if(selection < scroll_offset) {
+      scroll_offset = selection;
+    } else if(selection >= scroll_offset + kVisibleRows) {
+      scroll_offset = selection - kVisibleRows + 1;
     }
 
 #if NBA_DC_HAS_KOS
@@ -191,13 +199,12 @@ auto DCGameplayMenu::Run(
 
   while(true) {
     auto items = BuildPauseMenuItems(config, cheats);
-    ui.DrawMenu("Paused", items, selection, 0);
-
+    const auto status = status_frames > 0
+      ? std::string_view{status_message}
+      : std::string_view{"A=Select  B=Resume  Left/Right=Adjust slot"};
+    ui.DrawMenu("Paused", items, selection, 0, status);
     if(status_frames > 0) {
-      ui.DrawStatusBar(status_message);
       status_frames--;
-    } else {
-      ui.DrawStatusBar("A=select  B=back  L/R=adjust slot");
     }
 
     DCMenuInput menu;

@@ -34,7 +34,8 @@ void DCUI::DrawMenu(
   std::string_view title,
   std::vector<std::string> const& items,
   int selection,
-  int scroll_offset
+  int scroll_offset,
+  std::string_view status
 ) {
   ClearScreen();
   DrawTitle(title);
@@ -59,7 +60,7 @@ void DCUI::DrawMenu(
     DrawTextCentered(kListTop, "No items found");
   }
 
-  DrawStatusBar("A=Select  B=Back  Y=Settings  Start=Loader");
+  DrawStatusBar(status);
   Present();
 }
 
