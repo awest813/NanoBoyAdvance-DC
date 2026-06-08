@@ -44,6 +44,10 @@ without full-ROM allocations or undefined behavior after media failures.
   byte-by-byte (each byte previously re-ran the page lookup and cache scan).
   Boundary-spanning accesses still fall back to the byte-wise path.
 - [x] Keep the Dreamcast build green after the latest upstream pull.
+- [x] Stream `.zip` ROMs with miniz instead of buffering the full archive in RAM.
+- [x] Cache extracted ZIP ROMs under `/pc/roms/.cache/`.
+- [x] Parse gpSP-style `game_config.txt` idle-loop hints on ROM load.
+- [x] Prefetch the next paged-ROM page after each cache miss.
 
 ### Next Actions
 
@@ -101,6 +105,9 @@ without full-ROM allocations or undefined behavior after media failures.
 - [x] Add Accuracy / Balanced / Speed profiles.
 - [x] Add Show FPS overlay.
 - [x] Document benchmark workflow in `DREAMCAST.md`.
+- [x] Stream `.zip` ROM loading without full-archive RAM buffering (miniz).
+- [x] Apply gpSP `game_config.txt` idle-loop elimination on Dreamcast.
+- [x] Add paged-ROM read-ahead after cache misses.
 - [ ] Lock the benchmark ROM set in `COMPATIBILITY.md`.
 - [ ] Capture baseline FPS per profile on retail hardware.
 - [ ] Tune CPU/audio/video/cache hot paths against recorded baselines.

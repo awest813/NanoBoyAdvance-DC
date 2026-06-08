@@ -31,7 +31,8 @@ struct ROMLoader {
     fs::path const& rom_path,
     fs::path const& save_path,
     Config::BackupType backup_type = Config::BackupType::Detect,
-    GPIODeviceType force_gpio = GPIODeviceType::None
+    GPIODeviceType force_gpio = GPIODeviceType::None,
+    Config* tuning_config = nullptr
   ) -> Result;
 
   static auto Validate(fs::path const& path) -> Result;
