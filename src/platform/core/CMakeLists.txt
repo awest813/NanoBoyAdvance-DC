@@ -14,6 +14,7 @@ set(SOURCES
 
 set(HEADERS_PUBLIC
   include/platform/loader/bios.hh
+  include/platform/loader/dc_virtual_fs.hh
   include/platform/loader/rom.hh
   include/platform/loader/save_state.hh
   include/platform/writer/save_state.hh

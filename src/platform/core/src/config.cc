@@ -15,15 +15,14 @@ void PlatformConfig::Load(std::string const& path) {
     return;
   }
 
-  toml::value data;
-
   try {
-    data = toml::parse(path);
+    LoadFromToml(toml::parse(path));
   } catch (std::exception& ex) {
     ATOM_ERROR("Config: error while parsing TOML configuration: {0}", ex.what());
-    return;
   }
+}
 
+void PlatformConfig::LoadFromToml(toml::value const& data) {
   if(data.contains("general")) {
     auto general = data.at("general");
     this->bios_path = toml::find_or<std::string>(general, "bios_path", "bios.bin");
@@ -121,17 +120,8 @@ void PlatformConfig::Load(std::string const& path) {
   LoadCustomData(data);
 }
 
-void PlatformConfig::Save(std::string const& path) {
+auto PlatformConfig::BuildTomlDocument() -> toml::value {
   toml::value data;
-
-  if(std::filesystem::exists(path)) {
-    try {
-      data = toml::parse(path);
-    } catch (std::exception& ex) {
-      ATOM_ERROR("Config: error while parsing TOML configuration: {0}", ex.what());
-      return;
-    }
-  }
 
   // General
   data["general"]["bios_path"]   = this->bios_path;
@@ -194,6 +184,11 @@ void PlatformConfig::Save(std::string const& path) {
   data["audio"]["mp2k_hle_force_reverb"] = this->audio.mp2k_hle_force_reverb;
 
   SaveCustomData(data);
+  return data;
+}
+
+void PlatformConfig::Save(std::string const& path) {
+  const auto data = BuildTomlDocument();
 
   std::ofstream file{ path, std::ios::out };
   file << data;

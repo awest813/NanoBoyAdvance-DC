@@ -19,6 +19,7 @@
 #include "device/dc_input.hh"
 #include "open_bios.hh"
 
+#include <chrono>
 #include <cstdio>
 #include <exception>
 #include <memory>
@@ -43,6 +44,10 @@ auto BIOSLoader::LoadEmbedded(std::unique_ptr<CoreBase>& core) -> Result {
 static constexpr float kGBAFrameRate =
   static_cast<float>(16777216) / static_cast<float>(280896);
 static constexpr size_t kMaxGBAROMSize = 32 * 1024 * 1024;
+// Launch breadcrumbs always log to stdout for Flycast diagnosis.  Full-screen
+// holds are disabled in normal builds because they add several seconds of boot
+// delay and can mask timing-sensitive launch failures.
+static constexpr bool kDreamcastLaunchScreenBreadcrumbs = false;
 static constexpr bool kDreamcastAutobootTekken = false;
 static constexpr char kDreamcastAutobootROM[] = "/cd/tekken.gba";
 static constexpr char kDreamcastAutobootROMFallback[] = "/cd/Tekken.gba";
@@ -181,6 +186,10 @@ static auto LoadEmulator(
     }
     std::printf("\n");
     std::fflush(stdout);
+
+    if(!kDreamcastLaunchScreenBreadcrumbs) {
+      return;
+    }
 
     ui.ClearScreen();
     ui.DrawTitle("Debug");
@@ -363,34 +372,73 @@ static auto LoadEmulator(
   core->Reset();
   breadcrumb("Phase 9: Enter frame loop");
 
-  FrameLimiter frame_limiter(kGBAFrameRate);
   bool running = true;
   bool rom_read_failed = false;
   float measured_fps = 0.0f;
   u32 measured_page_misses = 0;
-  int debug_frames = 0;
+#if NBA_DC_HAS_KOS
+  int fps_frame_count = 0;
+  auto fps_last_update = std::chrono::steady_clock::now();
+  auto last_save_flush = fps_last_update;
+#else
+  FrameLimiter frame_limiter(kGBAFrameRate);
+#endif
+  static constexpr int kSaveFlushIntervalSeconds = 60;
 
   while(running) {
-    if(debug_frames < 3) {
-      char message[64];
-      std::snprintf(message, sizeof(message), "Frame %d before CPU", debug_frames);
-      breadcrumb("Phase 10: First frames", message);
-    }
-
+#if !NBA_DC_HAS_KOS
     frame_limiter.Run([&]() {
+#endif
       if(input.PollInput(*core)) {
         running = false;
+#if !NBA_DC_HAS_KOS
         return;
+#endif
       }
 
-      for(int skip = 0; skip <= config->frame_skip; skip++) {
-        core->RunForOneFrame();
-        if(core->GetROM().HasReadError()) {
-          rom_read_failed = true;
-          running = false;
-          return;
+      if(running) {
+        for(int skip = 0; skip <= config->frame_skip; skip++) {
+          core->RunForOneFrame();
+          if(core->GetROM().HasReadError()) {
+            rom_read_failed = true;
+            running = false;
+            break;
+          }
         }
       }
+
+#if NBA_DC_HAS_KOS
+      if(running && core->GetROM().HasBackup() && core->GetROM().IsBackupPersistent()) {
+        const auto now = std::chrono::steady_clock::now();
+        const auto save_elapsed = std::chrono::duration_cast<std::chrono::seconds>(
+          now - last_save_flush
+        ).count();
+        if(save_elapsed >= kSaveFlushIntervalSeconds) {
+          core->GetROM().FlushBackup();
+          last_save_flush = now;
+        }
+      }
+
+      if(running) {
+        fps_frame_count++;
+        const auto now = std::chrono::steady_clock::now();
+        const auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+          now - fps_last_update
+        ).count();
+        if(elapsed_ms >= 1000) {
+          measured_fps = fps_frame_count * 1000.0f / static_cast<float>(elapsed_ms);
+          measured_page_misses = core->GetROM().TakePageMissCount();
+          fps_frame_count = 0;
+          fps_last_update = now;
+          std::printf(
+            "[NBA-DC] Runtime: FPS %.1f, ROM page misses %lu\n",
+            static_cast<double>(measured_fps),
+            static_cast<unsigned long>(measured_page_misses)
+          );
+          std::fflush(stdout);
+        }
+      }
+#else
     }, [&](float fps) {
       measured_fps = fps;
       measured_page_misses = core->GetROM().TakePageMissCount();
@@ -401,13 +449,7 @@ static auto LoadEmulator(
       );
       std::fflush(stdout);
     });
-
-    if(debug_frames < 3) {
-      char message[64];
-      std::snprintf(message, sizeof(message), "Frame %d after CPU", debug_frames);
-      breadcrumb("Phase 11: First frames", message);
-      debug_frames++;
-    }
+#endif
 
 #if NBA_DC_HAS_KOS
     snd_stream_poll(SND_STREAM_INVALID);
@@ -513,8 +555,8 @@ int main(int argc, char** argv) {
   DCInput input;
 
   auto config = std::make_shared<DreamcastConfig>();
-  config->ApplyDefaults();
-  // Skip filesystem-dependent LoadDreamcast/EnsureDirectory that may hang on FlyCast
+  config->TryLoadDreamcast(DreamcastConfig::kDefaultConfigPath);
+  EnsureDirectoryPOSIX(DreamcastConfig::kDefaultSaveFolder);
 
   ui.DrawStatusBar("Loading frontend...");
   ui.Present();
