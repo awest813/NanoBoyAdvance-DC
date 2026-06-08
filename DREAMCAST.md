@@ -197,7 +197,7 @@ shown as `FS <n>`.
 
 **Exit combo during gameplay**: Hold Start + A + B + X + Y for ~1 second to return to the ROM browser.
 
-**Pause menu**: Hold **Start + B** for ~⅓ second to open the in-game pause menu. From there you can resume, save/load states, pick a slot, toggle cheats, or exit to the ROM browser.
+**Pause menu**: Hold **Start + B** for ~⅓ second to open the in-game pause menu. From there you can resume, save/load states, pick a slot, toggle cheats, view the **Controls** help screen, **Reset game**, or exit to the ROM browser. Reset and exit both prompt for confirmation (defaulting to **No**) so a stray button press cannot discard unsaved progress.
 
 **Save-state shortcuts** (also available from the pause menu):
 
