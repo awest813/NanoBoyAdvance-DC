@@ -43,6 +43,10 @@ auto BIOSLoader::LoadEmbedded(std::unique_ptr<CoreBase>& core) -> Result {
 static constexpr float kGBAFrameRate =
   static_cast<float>(16777216) / static_cast<float>(280896);
 static constexpr size_t kMaxGBAROMSize = 32 * 1024 * 1024;
+// Launch breadcrumbs always log to stdout for Flycast diagnosis.  Full-screen
+// holds are disabled in normal builds because they add several seconds of boot
+// delay and can mask timing-sensitive launch failures.
+static constexpr bool kDreamcastLaunchScreenBreadcrumbs = false;
 static constexpr bool kDreamcastAutobootTekken = false;
 static constexpr char kDreamcastAutobootROM[] = "/cd/tekken.gba";
 static constexpr char kDreamcastAutobootROMFallback[] = "/cd/Tekken.gba";
@@ -181,6 +185,10 @@ static auto LoadEmulator(
     }
     std::printf("\n");
     std::fflush(stdout);
+
+    if(!kDreamcastLaunchScreenBreadcrumbs) {
+      return;
+    }
 
     ui.ClearScreen();
     ui.DrawTitle("Debug");
@@ -368,15 +376,8 @@ static auto LoadEmulator(
   bool rom_read_failed = false;
   float measured_fps = 0.0f;
   u32 measured_page_misses = 0;
-  int debug_frames = 0;
 
   while(running) {
-    if(debug_frames < 3) {
-      char message[64];
-      std::snprintf(message, sizeof(message), "Frame %d before CPU", debug_frames);
-      breadcrumb("Phase 10: First frames", message);
-    }
-
     frame_limiter.Run([&]() {
       if(input.PollInput(*core)) {
         running = false;
@@ -401,13 +402,6 @@ static auto LoadEmulator(
       );
       std::fflush(stdout);
     });
-
-    if(debug_frames < 3) {
-      char message[64];
-      std::snprintf(message, sizeof(message), "Frame %d after CPU", debug_frames);
-      breadcrumb("Phase 11: First frames", message);
-      debug_frames++;
-    }
 
 #if NBA_DC_HAS_KOS
     snd_stream_poll(SND_STREAM_INVALID);

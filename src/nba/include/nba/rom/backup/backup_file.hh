@@ -30,14 +30,13 @@ struct BackupFile {
 #if defined(PLATFORM_DREAMCAST)
     const auto save_path_string = save_path.string();
     if(save_path_string.rfind("/pc/", 0) == 0) {
-      // On Dreamcast /pc/ paths std::filesystem is unreliable; use the C file
-      // API which works through KOS's virtual filesystem layer.
+      // On Dreamcast /pc/ paths std::filesystem and std::fstream are unreliable
+      // through KOS's virtual filesystem; use POSIX fopen/fwrite instead.
       file->save_size = static_cast<size_t>(default_size);
       file->memory.reset(new u8[default_size]);
       std::memset(file->memory.get(), 0xFF, default_size);
-      file->auto_update = false; // default; upgraded below if stream opens
+      file->auto_update = false;
 
-      // Attempt to load an existing save file.
       bool loaded_existing = false;
       if(auto* f = std::fopen(save_path_string.c_str(), "rb")) {
         std::fseek(f, 0, SEEK_END);
@@ -57,27 +56,33 @@ struct BackupFile {
         std::fclose(f);
       }
 
-      // Try to open the stream for write-back.  On real KallistiOS hardware
-      // this works (std::fstream delegates to fopen); on Flycast the stream
-      // may fail to open, in which case save data remains in-memory only.
-      //
-      // If we loaded an existing valid save, open in-place without truncating
-      // so we only rewrite bytes that actually change (via Update / auto_update).
-      // If no valid save existed, truncate to create a fresh file.
-      if(loaded_existing) {
-        file->stream.open(save_path_string.c_str(), flags);
-      } else {
-        file->stream.open(save_path_string.c_str(), flags | std::ios::trunc);
-        if(file->stream.good()) {
-          // Write the initial 0xFF-filled block so the file has the right size.
-          file->stream.write(
-            reinterpret_cast<const char*>(file->memory.get()),
-            static_cast<std::streamsize>(file->save_size)
-          );
-        }
-      }
+      auto open_for_write_back = [&]() -> bool {
+        if(loaded_existing) {
+          file->posix_file = std::fopen(save_path_string.c_str(), "rb+");
+        } else {
+          if(auto* create_file = std::fopen(save_path_string.c_str(), "wb")) {
+            const size_t written = std::fwrite(
+              file->memory.get(),
+              1,
+              file->save_size,
+              create_file
+            );
+            const bool flushed = std::fflush(create_file) == 0;
+            const bool closed = std::fclose(create_file) == 0;
+            if(written != file->save_size || !flushed || !closed) {
+              return false;
+            }
+          } else {
+            return false;
+          }
 
-      if(file->stream.good()) {
+          file->posix_file = std::fopen(save_path_string.c_str(), "rb+");
+        }
+
+        return file->posix_file != nullptr;
+      };
+
+      if(open_for_write_back()) {
         file->auto_update = true;
       }
 
@@ -124,6 +129,16 @@ struct BackupFile {
     return file;
   }
 
+  ~BackupFile() {
+    if(posix_file) {
+      std::fclose(posix_file);
+      posix_file = nullptr;
+    }
+  }
+
+  BackupFile(BackupFile const&) = delete;
+  auto operator=(BackupFile const&) -> BackupFile& = delete;
+
   auto Read(unsigned index) -> u8 {
     if(index >= save_size) {
       throw std::runtime_error("BackupFile: out-of-bounds index while reading.");
@@ -155,6 +170,15 @@ struct BackupFile {
     if((index + length) > save_size) {
       throw std::runtime_error("BackupFile: out-of-bounds index while updating file.");
     }
+
+    if(posix_file) {
+      if(std::fseek(posix_file, static_cast<long>(index), SEEK_SET) != 0) {
+        return;
+      }
+      std::fwrite(&memory[index], 1, length, posix_file);
+      return;
+    }
+
     stream.seekp(static_cast<std::streamoff>(index));
     stream.write(reinterpret_cast<const char*>(&memory[index]), static_cast<std::streamsize>(length));
   }
@@ -182,6 +206,10 @@ struct BackupFile {
   // save is now safely on disk.
   auto Flush() -> bool {
     if(auto_update) {
+      if(posix_file) {
+        return std::fflush(posix_file) == 0;
+      }
+
       stream.flush();
       return stream.good();
     }
@@ -204,11 +232,12 @@ struct BackupFile {
   bool auto_update = true;
 
 private:
-  BackupFile() { }
+  BackupFile() = default;
 
   fs::path path;
-  size_t save_size;
+  size_t save_size = 0;
   std::fstream stream;
+  FILE* posix_file = nullptr;
   std::unique_ptr<u8[]> memory;
 };
 
