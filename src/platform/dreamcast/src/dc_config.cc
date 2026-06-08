@@ -14,7 +14,9 @@ namespace nba {
 void DreamcastConfig::ApplyDefaults() {
   bios_path = kDefaultBIOSPath;
   save_folder = kDefaultSaveFolder;
+  state_folder = kDefaultStateFolder;
   rom_folder = kDefaultROMFolder;
+  save_state_slot = 0;
   video.filter = PlatformConfig::Video::Filter::Nearest;
   video.color = PlatformConfig::Video::Color::No;
   show_fps = false;
@@ -142,9 +144,12 @@ void DreamcastConfig::LoadCustomData(toml::value const& data) {
   show_fps = toml::find_or<bool>(dreamcast, "show_fps", show_fps);
   allow_large_roms = toml::find_or<bool>(dreamcast, "allow_large_roms", allow_large_roms);
   rom_folder = toml::find_or<std::string>(dreamcast, "rom_folder", rom_folder);
+  state_folder = toml::find_or<std::string>(dreamcast, "state_folder", state_folder);
   last_rom = toml::find_or<std::string>(dreamcast, "last_rom", last_rom);
+  save_state_slot = toml::find_or<int>(dreamcast, "save_state_slot", save_state_slot);
 
   frame_skip = std::clamp(frame_skip, 0, 3);
+  save_state_slot = std::clamp(save_state_slot, 0, kSaveStateSlotCount - 1);
 
   if(audio_buffer_size != 2048 && audio_buffer_size != 4096 && audio_buffer_size != 8192) {
     audio_buffer_size = 4096;
@@ -158,7 +163,9 @@ void DreamcastConfig::SaveCustomData(toml::value& data) {
   data["dreamcast"]["show_fps"] = show_fps;
   data["dreamcast"]["allow_large_roms"] = allow_large_roms;
   data["dreamcast"]["rom_folder"] = rom_folder;
+  data["dreamcast"]["state_folder"] = state_folder;
   data["dreamcast"]["last_rom"] = last_rom;
+  data["dreamcast"]["save_state_slot"] = save_state_slot;
 }
 
 } // namespace nba

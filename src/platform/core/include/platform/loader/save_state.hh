@@ -24,8 +24,7 @@ struct SaveStateLoader {
     fs::path const& path
   ) -> Result;
 
-private:
-  static auto Validate(SaveState const& save_state) -> Result;
+  static auto ValidateImage(SaveState const& save_state) -> Result;
 };
 
 } // namespace nba

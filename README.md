@@ -30,8 +30,9 @@ This fork of NanoBoyAdvance is a **Dreamcast-only port**.
 | Video Output | Working | PVR hardware 2× scaling |
 | Input | Working | Maple controller |
 | Save Files | Partial | Per-ROM saves at `/pc/saves`, no VMU support yet |
-| Save States | Missing | UI not implemented |
-| ROM Browser | Working | Scans `/pc/roms` and `/cd` |
+| Save States | Working | 10 slots; pause menu + L+R+Start/Select hotkeys |
+| Cheats | Partial | gpSP `.cht` files; GameShark/PAR v1/v3 write codes |
+| ROM Browser | Working | Scans `/pc/roms`, `/cd`, and `/cd/gbaDC`; supports `.gba`, `.bin`, `.zip` |
 
 ## Running & Compiling
 For instructions on how to build and run this port on the Sega Dreamcast, please see **[DREAMCAST.md](DREAMCAST.md)**.

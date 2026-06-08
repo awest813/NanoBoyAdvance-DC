@@ -14,6 +14,8 @@ struct DreamcastConfig : PlatformConfig {
   static constexpr const char* kDefaultBIOSPath = "/cd/bios.bin";
   static constexpr const char* kDefaultROMFolder = "/pc/roms";
   static constexpr const char* kDefaultSaveFolder = "/pc/saves";
+  static constexpr const char* kDefaultStateFolder = "/pc/states";
+  static constexpr int kSaveStateSlotCount = 10;
 
   // Performance profiles trade emulation accuracy for speed on the
   // fixed Dreamcast hardware budget. Selecting a profile applies a
@@ -30,7 +32,9 @@ struct DreamcastConfig : PlatformConfig {
   bool allow_large_roms = false;
   PerformanceProfile performance_profile = PerformanceProfile::Balanced;
   std::string rom_folder = kDefaultROMFolder;
+  std::string state_folder = kDefaultStateFolder;
   std::string last_rom;
+  int save_state_slot = 0;
 
   void ApplyDefaults();
   // Applies a profile's preset to the CPU/audio/video knobs. Intended to be

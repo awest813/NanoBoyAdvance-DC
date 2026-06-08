@@ -10,6 +10,7 @@
 #include <platform/loader/rom.hh>
 #include <atom/logger/logger.hh>
 #include <unarr.h>
+#include <cctype>
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
@@ -28,6 +29,135 @@ static constexpr size_t kHeaderChecksumEnd = 0xBC;
 #if defined(PLATFORM_DREAMCAST)
 static constexpr bool kDreamcastForceFlatSmallROMs = false;
 static constexpr size_t kDreamcastFlatROMLimit = 8 * 1024 * 1024;
+
+static auto IsROMArchiveExtension(fs::path const& path) -> bool {
+  auto extension = path.extension().string();
+  for(auto& character : extension) {
+    character = static_cast<char>(std::tolower(static_cast<unsigned char>(character)));
+  }
+
+  return extension == ".zip" || extension == ".7z" || extension == ".rar" || extension == ".tar";
+}
+
+static auto ReadROMArchiveStream(ar_stream* stream, std::vector<u8>& file_data) -> Result {
+  if(!stream) {
+    return Result::CannotOpenFile;
+  }
+
+  ar_archive* archive = ar_open_zip_archive(stream, false);
+
+  if(!archive) archive = ar_open_rar_archive(stream);
+  if(!archive) archive = ar_open_7z_archive(stream);
+  if(!archive) archive = ar_open_tar_archive(stream);
+
+  if(!archive) {
+    return Result::CannotOpenFile;
+  }
+
+  auto result = Result::BadImage;
+
+  while(ar_parse_entry(archive)) {
+    auto filename = ar_entry_get_name(archive);
+    auto extension = fs::path{filename}.extension().string();
+    for(auto& character : extension) {
+      character = static_cast<char>(std::tolower(static_cast<unsigned char>(character)));
+    }
+
+    if(extension == ".gba" || extension == ".bin") {
+      auto size = ar_entry_get_size(archive);
+      file_data.resize(size);
+      ar_entry_uncompress(archive, file_data.data(), size);
+      result = Result::Success;
+      break;
+    }
+  }
+
+  ar_close_archive(archive);
+  return result;
+}
+
+static auto ReadDreamcastArchive(fs::path const& path, std::vector<u8>& file_data) -> Result {
+  size_t archive_size = 0;
+  if(!GetDreamcastVirtualFileSize(path, archive_size, kMaxROMSize)) {
+    return Result::CannotOpenFile;
+  }
+
+  std::vector<u8> archive_data(archive_size);
+  auto* file = OpenDreamcastVirtualFile(path);
+  if(!file) {
+    return Result::CannotOpenFile;
+  }
+
+  const auto read = std::fread(archive_data.data(), 1, archive_data.size(), file);
+  std::fclose(file);
+
+  if(read != archive_data.size()) {
+    return Result::CannotOpenFile;
+  }
+
+  auto* stream = ar_open_memory(archive_data.data(), archive_data.size());
+  if(!stream) {
+    return Result::CannotOpenFile;
+  }
+
+  const auto result = ReadROMArchiveStream(stream, file_data);
+  ar_close(stream);
+  return result;
+}
+
+static auto GetDreamcastArchiveROMSize(fs::path const& path, size_t& rom_size) -> bool {
+  rom_size = 0;
+
+  size_t archive_size = 0;
+  if(!GetDreamcastVirtualFileSize(path, archive_size, kMaxROMSize)) {
+    return false;
+  }
+
+  std::vector<u8> archive_data(archive_size);
+  auto* file = OpenDreamcastVirtualFile(path);
+  if(!file) {
+    return false;
+  }
+
+  const auto read = std::fread(archive_data.data(), 1, archive_data.size(), file);
+  std::fclose(file);
+
+  if(read != archive_data.size()) {
+    return false;
+  }
+
+  auto* stream = ar_open_memory(archive_data.data(), archive_data.size());
+  if(!stream) {
+    return false;
+  }
+
+  ar_archive* archive = ar_open_zip_archive(stream, false);
+  if(!archive) archive = ar_open_rar_archive(stream);
+  if(!archive) archive = ar_open_7z_archive(stream);
+  if(!archive) archive = ar_open_tar_archive(stream);
+
+  bool found = false;
+  if(archive) {
+    while(ar_parse_entry(archive)) {
+      auto filename = ar_entry_get_name(archive);
+      auto extension = fs::path{filename}.extension().string();
+      for(auto& character : extension) {
+        character = static_cast<char>(std::tolower(static_cast<unsigned char>(character)));
+      }
+
+      if(extension == ".gba" || extension == ".bin") {
+        rom_size = static_cast<size_t>(ar_entry_get_size(archive));
+        found = rom_size > 0 && rom_size <= kMaxROMSize;
+        break;
+      }
+    }
+
+    ar_close_archive(archive);
+  }
+
+  ar_close(stream);
+  return found;
+}
 
 static void DreamcastLoaderTrace(char const* phase, fs::path const& path, size_t size = 0) {
   std::printf("[NBA-DC] ROMLoader %s: %s", phase, path.string().c_str());
@@ -466,6 +596,10 @@ auto ROMLoader::Load(
 auto ROMLoader::ReadFile(fs::path const& path, std::vector<u8>& file_data) -> Result {
 #if defined(PLATFORM_DREAMCAST)
   if(IsDreamcastVirtualPath(path)) {
+    if(IsROMArchiveExtension(path)) {
+      return ReadDreamcastArchive(path, file_data);
+    }
+
     size_t size = 0;
     if(!GetDreamcastVirtualFileSize(path, size, kMaxROMSize)) {
       return Result::CannotOpenFile;
@@ -525,33 +659,7 @@ auto ROMLoader::ReadFileFromArchive(fs::path const& path, std::vector<u8>& file_
     return Result::CannotOpenFile;
   }
 
-  ar_archive* archive = ar_open_zip_archive(stream, false);
-
-  if(!archive) archive = ar_open_rar_archive(stream);
-  if(!archive) archive = ar_open_7z_archive(stream);
-  if(!archive) archive = ar_open_tar_archive(stream);
-
-  if(!archive) {
-    ar_close(stream);
-    return Result::CannotOpenFile;
-  }
-
-  auto result = Result::BadImage;
-
-  while(ar_parse_entry(archive)) {
-    auto filename = ar_entry_get_name(archive);
-    auto extension = fs::path{filename}.extension();
-
-    if(extension == ".gba" || extension == ".GBA") {
-      auto size = ar_entry_get_size(archive);
-      file_data.resize(size);
-      ar_entry_uncompress(archive, file_data.data(), size);
-      result = Result::Success;
-      break;
-    }
-  }
-
-  ar_close_archive(archive);
+  const auto result = ReadROMArchiveStream(stream, file_data);
   ar_close(stream);
   return result;
 }
@@ -618,6 +726,30 @@ auto ROMLoader::CreateBackup(
 auto ROMLoader::Validate(fs::path const& path) -> Result {
 #if defined(PLATFORM_DREAMCAST)
   if(IsDreamcastVirtualPath(path)) {
+    if(IsROMArchiveExtension(path)) {
+      size_t rom_size = 0;
+      if(!GetDreamcastArchiveROMSize(path, rom_size)) {
+        return Result::CannotOpenFile;
+      }
+
+      if(rom_size < sizeof(Header) || rom_size > kMaxROMSize) {
+        return Result::BadImage;
+      }
+
+      static constexpr size_t kArchiveHeaderValidateLimit = 4 * 1024 * 1024;
+      if(rom_size > kArchiveHeaderValidateLimit) {
+        return Result::Success;
+      }
+
+      auto file_data = std::vector<u8>{};
+      const auto read_status = ReadDreamcastArchive(path, file_data);
+      if(read_status != Result::Success) {
+        return read_status;
+      }
+
+      return ValidateROMData(file_data);
+    }
+
     // Read only the ROM header to avoid loading the entire cartridge into memory.
     size_t size = 0;
     auto size_status = GetFileSize(path, size);
@@ -661,6 +793,13 @@ auto ROMLoader::GetFileSize(fs::path const& path, size_t& file_size) -> Result {
 
 #if defined(PLATFORM_DREAMCAST)
   if(IsDreamcastVirtualPath(path)) {
+    if(IsROMArchiveExtension(path)) {
+      if(GetDreamcastArchiveROMSize(path, file_size)) {
+        return Result::Success;
+      }
+      return Result::CannotOpenFile;
+    }
+
     if(!GetDreamcastVirtualFileSize(path, file_size, kMaxROMSize)) {
       return Result::CannotOpenFile;
     }

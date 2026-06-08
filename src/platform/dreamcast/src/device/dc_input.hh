@@ -16,6 +16,13 @@
 
 namespace nba {
 
+struct DCGameplayRequest {
+  bool save_state = false;
+  bool load_state = false;
+  bool open_pause_menu = false;
+  int save_slot_delta = 0;
+};
+
 struct DCMenuInput {
   bool up = false;
   bool down = false;
@@ -33,18 +40,20 @@ struct DCInput {
   static constexpr int kAnalogDeadZone = 32;
   static constexpr int kExitDebounceFrames = 60;
   static constexpr int kExitHintFrames = 30;
+  static constexpr int kSaveStateDebounceFrames = 30;
+  static constexpr int kPauseMenuDebounceFrames = 20;
 
   enum class Button {
     Start
   };
 
-  auto PollInput(CoreBase& core) -> bool;
+  auto PollInput(CoreBase& core, DCGameplayRequest& request) -> bool;
   auto PollMenu(DCMenuInput& menu) -> void;
   auto WaitForButton(Button button) -> void;
   auto IsExitHintActive() const -> bool;
+  static void ClearKeys(CoreBase& core);
 
 private:
-  static void ClearKeys(CoreBase& core);
 
 #if NBA_DC_HAS_KOS
   auto ReadControllerState() -> cont_state_t*;
@@ -56,6 +65,10 @@ private:
 #endif
 
   int exit_combo_frames_ = 0;
+  int save_state_cooldown_ = 0;
+  int load_state_cooldown_ = 0;
+  int pause_menu_frames_ = 0;
+  uint32 previous_shoulder_combo_ = 0;
 };
 
 } // namespace nba

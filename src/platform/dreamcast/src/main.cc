@@ -8,8 +8,10 @@
 #include <platform/loader/rom.hh>
 #include <platform/frame_limiter.hh>
 
+#include "dc_cheats.hh"
 #include "dc_config.hh"
 #include "dc_frontend.hh"
+#include "dc_gameplay_menu.hh"
 #include "dc_memory.hh"
 #include "dc_paths.hh"
 #include "dc_rom_browser.hh"
@@ -19,6 +21,7 @@
 #include "device/dc_input.hh"
 #include "open_bios.hh"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <exception>
@@ -370,12 +373,17 @@ static auto LoadEmulator(
 
   breadcrumb("Phase 8: Core reset");
   core->Reset();
+
+  DCCheatDatabase cheats;
+  cheats.LoadForROM(rom_path);
   breadcrumb("Phase 9: Enter frame loop");
 
   bool running = true;
   bool rom_read_failed = false;
   float measured_fps = 0.0f;
   u32 measured_page_misses = 0;
+  std::string gameplay_overlay;
+  int gameplay_overlay_frames = 0;
 #if NBA_DC_HAS_KOS
   int fps_frame_count = 0;
   auto fps_last_update = std::chrono::steady_clock::now();
@@ -389,14 +397,53 @@ static auto LoadEmulator(
 #if !NBA_DC_HAS_KOS
     frame_limiter.Run([&]() {
 #endif
-      if(input.PollInput(*core)) {
+      DCGameplayRequest gameplay_request;
+      if(input.PollInput(*core, gameplay_request)) {
         running = false;
 #if !NBA_DC_HAS_KOS
         return;
 #endif
       }
 
+      if(gameplay_request.open_pause_menu) {
+        input.ClearKeys(*core);
+        const auto menu_action = DCGameplayMenu::Run(
+          ui,
+          input,
+          *config,
+          core,
+          cheats,
+          rom_path
+        );
+        if(menu_action == DCGameplayMenu::Action::ExitToBrowser) {
+          running = false;
+        }
+        continue;
+      }
+
+      if(gameplay_request.save_slot_delta != 0) {
+        config->save_state_slot = std::clamp(
+          config->save_state_slot + gameplay_request.save_slot_delta,
+          0,
+          DreamcastConfig::kSaveStateSlotCount - 1
+        );
+        char slot_text[32];
+        std::snprintf(slot_text, sizeof(slot_text), "State slot %d", config->save_state_slot);
+        gameplay_overlay = slot_text;
+        gameplay_overlay_frames = 90;
+      }
+
+      if(gameplay_request.save_state) {
+        gameplay_overlay = DCGameplayMenu::SaveState(core, *config, rom_path);
+        gameplay_overlay_frames = 90;
+      } else if(gameplay_request.load_state) {
+        gameplay_overlay = DCGameplayMenu::LoadState(core, *config, rom_path);
+        gameplay_overlay_frames = 90;
+      }
+
       if(running) {
+        cheats.Apply(*core);
+
         for(int skip = 0; skip <= config->frame_skip; skip++) {
           core->RunForOneFrame();
           if(core->GetROM().HasReadError()) {
@@ -473,6 +520,11 @@ static auto LoadEmulator(
 
     if(input.IsExitHintActive()) {
       video_device->DrawOverlay("Hold Start+A+B+X+Y to exit");
+    }
+
+    if(gameplay_overlay_frames > 0) {
+      video_device->DrawOverlay(gameplay_overlay.c_str());
+      gameplay_overlay_frames--;
     }
 #endif
   }

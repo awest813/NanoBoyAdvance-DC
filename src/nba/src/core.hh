@@ -36,6 +36,12 @@ struct Core final : CoreBase {
   auto PeekByteIO(u32 address) -> u8  override;
   auto PeekHalfIO(u32 address) -> u16 override;
   auto PeekWordIO(u32 address) -> u32 override;
+  auto PeekByte(u32 address) -> u8 override;
+  auto PeekHalf(u32 address) -> u16 override;
+  auto PeekWord(u32 address) -> u32 override;
+  void PokeByte(u32 address, u8 value) override;
+  void PokeHalf(u32 address, u16 value) override;
+  void PokeWord(u32 address, u32 value) override;
   auto GetBGHOFS(int id) -> u16 override;
   auto GetBGVOFS(int id) -> u16 override;
 

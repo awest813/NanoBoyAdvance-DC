@@ -5,37 +5,64 @@
 #include <filesystem>
 #include <fstream>
 
+#if defined(PLATFORM_DREAMCAST)
+#include <platform/loader/dc_virtual_fs.hh>
+#endif
+
 namespace nba {
 
 auto SaveStateLoader::Load(
   std::unique_ptr<CoreBase>& core,
   fs::path const& path
 ) -> Result {
-  if(!fs::exists(path)) {
-    return Result::CannotFindFile;
-  }
-
-  if(!fs::is_regular_file(path)) {
-    return Result::CannotOpenFile;
-  }
-
-  auto file_size = fs::file_size(path);
-
-  if(file_size != sizeof(SaveState)) {
-    return Result::BadImage;
-  }
-
   SaveState save_state;
 
-  std::ifstream file_stream{path.c_str(), std::ios::binary};
+#if defined(PLATFORM_DREAMCAST)
+  if(IsDreamcastVirtualPath(path)) {
+    size_t file_size = 0;
+    if(!GetDreamcastVirtualFileSize(path, file_size) ||
+        file_size != sizeof(SaveState)) {
+      return file_size == 0 ? Result::CannotFindFile : Result::BadImage;
+    }
 
-  if(!file_stream.good()) {
-    return Result::CannotOpenFile;
+    auto* file = OpenDreamcastVirtualFile(path);
+    if(!file) {
+      return Result::CannotOpenFile;
+    }
+
+    const auto read = std::fread(&save_state, 1, sizeof(SaveState), file);
+    std::fclose(file);
+
+    if(read != sizeof(SaveState)) {
+      return Result::CannotOpenFile;
+    }
+  } else
+#endif
+  {
+    if(!fs::exists(path)) {
+      return Result::CannotFindFile;
+    }
+
+    if(!fs::is_regular_file(path)) {
+      return Result::CannotOpenFile;
+    }
+
+    auto file_size = fs::file_size(path);
+
+    if(file_size != sizeof(SaveState)) {
+      return Result::BadImage;
+    }
+
+    std::ifstream file_stream{path.c_str(), std::ios::binary};
+
+    if(!file_stream.good()) {
+      return Result::CannotOpenFile;
+    }
+
+    file_stream.read((char*)&save_state, sizeof(SaveState));
   }
 
-  file_stream.read((char*)&save_state, sizeof(SaveState));
-
-  auto validate_result = Validate(save_state);
+  auto validate_result = ValidateImage(save_state);
 
   if(validate_result != Result::Success) {
     return validate_result;
@@ -45,7 +72,7 @@ auto SaveStateLoader::Load(
   return Result::Success;
 }
 
-auto SaveStateLoader::Validate(SaveState const& save_state) -> Result {
+auto SaveStateLoader::ValidateImage(SaveState const& save_state) -> Result {
   if(save_state.magic != SaveState::kMagicNumber) {
     return Result::BadImage;
   }
