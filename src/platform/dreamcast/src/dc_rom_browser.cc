@@ -74,20 +74,21 @@ static auto AddROMEntry(
   std::set<fs::path>& seen,
   std::vector<ROMEntry>& entries,
   DreamcastConfig const& config,
-  bool validate = true
-) -> void {
+  bool validate = true,
+  std::string label_override = {}
+) -> bool {
 #if defined(PLATFORM_DREAMCAST)
   const fs::path entry_path{ResolveDreamcastVirtualPath(path)};
 #else
   const fs::path entry_path = path;
 #endif
 
-  if(!seen.insert(entry_path).second) {
-    return;
+  if(seen.find(entry_path) != seen.end()) {
+    return false;
   }
 
   if(validate && ROMLoader::Validate(entry_path) != ROMLoader::Result::Success) {
-    return;
+    return false;
   }
 
   size_t size = 0;
@@ -95,26 +96,27 @@ static auto AddROMEntry(
 
   // Strip the ISO9660 version suffix (e.g. ";1") from the display label so
   // disc filenames like "GAME.GBA;1" appear as "GAME.GBA" in the menu.
-  auto label = entry_path.filename().string();
+  auto label = label_override.empty() ? entry_path.filename().string() : std::move(label_override);
   const auto semicolon = label.rfind(';');
   if(semicolon != std::string::npos) {
     label.resize(semicolon);
   }
 
+  seen.insert(entry_path);
   if(have_size) {
     entries.push_back(ROMEntry{
       entry_path,
       BuildROMLabel(std::move(label), size, config),
       size
     });
-    return;
+  } else {
+    entries.push_back(ROMEntry{
+      entry_path,
+      std::move(label) + " (size unknown)",
+      0
+    });
   }
-
-  entries.push_back(ROMEntry{
-    entry_path,
-    std::move(label) + " (size unknown)",
-    0
-  });
+  return true;
 }
 
 static auto AddDirectoryEntries(
@@ -136,19 +138,26 @@ static auto AddDirectoryEntries(
         continue;
       }
 
-      auto name = std::string{entry->d_name};
+      auto raw_name = std::string{entry->d_name};
+      auto clean_name = raw_name;
 
-      // Strip ISO9660 version suffix from the filename used as the file path.
-      const auto semicolon_pos = name.rfind(';');
+      // Strip ISO9660 version suffix for extension checks and display labels.
+      const auto semicolon_pos = clean_name.rfind(';');
       if(semicolon_pos != std::string::npos) {
-        name.resize(semicolon_pos);
+        clean_name.resize(semicolon_pos);
       }
 
-      if(!HasGBAExtension(name)) {
+      if(!HasGBAExtension(clean_name)) {
         continue;
       }
 
-      AddROMEntry(directory / name, seen, entries, config);
+      // KOS/Flycast ISO9660 drivers differ on whether fopen wants "GAME.GBA"
+      // or the raw "GAME.GBA;1" directory entry. Try the clean path first for
+      // stable save names, then fall back to the raw path if needed.
+      if(!AddROMEntry(directory / clean_name, seen, entries, config, true, clean_name) &&
+          raw_name != clean_name) {
+        AddROMEntry(directory / raw_name, seen, entries, config, true, clean_name);
+      }
     }
 
     closedir(dir);
@@ -194,12 +203,9 @@ auto ROMBrowser::Scan(DreamcastConfig const& config) -> std::vector<ROMEntry> {
     bool last_rom_exists = false;
 #if defined(PLATFORM_DREAMCAST)
     {
-      const auto s = last_path.string();
-      if(s.rfind("/cd/", 0) == 0 || s.rfind("/pc/", 0) == 0) {
-        if(auto* f = std::fopen(s.c_str(), "rb")) {
-          std::fclose(f);
-          last_rom_exists = true;
-        }
+      if(auto* file = OpenDreamcastVirtualFile(last_path)) {
+        std::fclose(file);
+        last_rom_exists = true;
       } else {
         last_rom_exists = fs::exists(last_path);
       }
