@@ -37,12 +37,22 @@ static auto IsInvalidControllerState(cont_state_t const* state) -> bool {
 }
 #endif
 
-auto DCInput::PollInput(CoreBase& core) -> bool {
+auto DCInput::PollInput(CoreBase& core, DCGameplayRequest& request) -> bool {
+  request = {};
+
 #if NBA_DC_HAS_KOS
+  if(save_state_cooldown_ > 0) {
+    save_state_cooldown_--;
+  }
+  if(load_state_cooldown_ > 0) {
+    load_state_cooldown_--;
+  }
+
   cont_state_t* state = ReadControllerState();
   if(!state || IsInvalidControllerState(state)) {
     ClearKeys(core);
     exit_combo_frames_ = 0;
+    previous_shoulder_combo_ = 0;
     return false;
   }
 
@@ -70,9 +80,36 @@ auto DCInput::PollInput(CoreBase& core) -> bool {
     exit_combo_frames_ = 0;
   }
 
+  // gpSPDC-style shoulder shortcuts: hold GBA L+R (Dreamcast X+Y) with Start
+  // to save and Select to load the active save-state slot.
+  const uint32 shoulder_combo = CONT_X | CONT_Y;
+  const bool shoulders_held = (state->buttons & shoulder_combo) == shoulder_combo;
+  if(shoulders_held) {
+    if((state->buttons & CONT_START) && save_state_cooldown_ == 0) {
+      request.save_state = true;
+      save_state_cooldown_ = kSaveStateDebounceFrames;
+    } else if((state->buttons & CONT_D) && load_state_cooldown_ == 0) {
+      request.load_state = true;
+      load_state_cooldown_ = kSaveStateDebounceFrames;
+    }
+
+    const uint32 slot_change = state->buttons & (CONT_DPAD_LEFT | CONT_DPAD_RIGHT);
+    if(slot_change && slot_change != previous_shoulder_combo_) {
+      if(state->buttons & CONT_DPAD_LEFT) {
+        request.save_slot_delta = -1;
+      } else if(state->buttons & CONT_DPAD_RIGHT) {
+        request.save_slot_delta = 1;
+      }
+    }
+    previous_shoulder_combo_ = slot_change;
+  } else {
+    previous_shoulder_combo_ = 0;
+  }
+
   return exit_combo_frames_ >= kExitDebounceFrames;
 #else
   (void)core;
+  (void)request;
   return false;
 #endif
 }

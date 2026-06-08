@@ -70,8 +70,9 @@ mkisofs -C 0,11702 -V "NBA_DC" -G IP.BIN -l -o nba-dc.iso cd_root/
 | File / Folder | Path | Description |
 |---------------|------|-------------|
 | GBA BIOS | `/cd/bios.bin` or `/pc/bios.bin` | Required. Configurable in settings |
-| GBA ROMs | `/pc/roms/*.gba` or `/cd/*.gba` | Scanned by the in-app ROM browser |
+| GBA ROMs | `/pc/roms/*.{gba,bin,zip}` or `/cd/*.{gba,bin,zip}` or `/cd/gbaDC/` | Scanned by the in-app ROM browser (gpSPDC-style `gbaDC` folder included) |
 | Save data | `/pc/saves/<rom>.sav` | Per-ROM backup saves (configurable folder) |
+| Save states | `/pc/states/<rom>.ss0`–`.ss9` | 10 slots per ROM (configurable folder) |
 | Settings | `/pc/nba-dc.toml` | Frame skip, audio buffer, path overrides |
 
 Writable `/pc` paths require an SD/IDE adapter or equivalent host filesystem mount.
@@ -173,11 +174,21 @@ afterward without losing the rest of the preset.
 
 **Exit combo during gameplay**: Hold Start + A + B + X + Y for ~1 second to return to the ROM browser.
 
+**Save-state shortcuts** (inspired by gpSPDC):
+
+| Combo | Action |
+|-------|--------|
+| L + R + Start | Save to the active slot |
+| L + R + Select | Load from the active slot |
+| L + R + D-Pad Left/Right | Change the active slot (0–9) |
+
+Dreamcast **X** and **Y** map to GBA **L** and **R** during play, so hold both shoulder buttons together with Start or Select. A short on-screen message confirms save/load results.
+
 Errors and loading screens show on-screen text with path details. Press Start to dismiss fatal errors.
 
 ## Current Limitations
 
-- **No save states** – save state UI is not implemented yet
+- **Save states** – gameplay hotkeys only (no in-game menu yet); see controls below
 - **No VMU saves** – filesystem saves only
 - **No post-processing** – color correction and xBRZ upscaling are disabled (LCD ghosting is enabled only by the Accuracy profile). Gameplay frames use PVR nearest-neighbor 2× scaling; shader-based filters remain unavailable.
 - **Single-threaded** – the emulation loop runs on the main thread

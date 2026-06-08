@@ -8,6 +8,7 @@
 #include <platform/loader/rom.hh>
 
 #include <algorithm>
+#include <cctype>
 #include <cstdio>
 #include <cstring>
 #include <dirent.h>
@@ -15,19 +16,27 @@
 
 namespace nba {
 
-static auto HasGBAExtension(std::string const& path) -> bool {
-  const auto dot = path.find_last_of('.');
-  if(dot == std::string::npos) {
-    return false;
-  }
-
-  auto extension = path.substr(dot);
+static auto NormalizeExtension(std::string extension) -> std::string {
   const auto version = extension.find(';');
   if(version != std::string::npos) {
     extension.resize(version);
   }
 
-  return extension == ".gba" || extension == ".GBA";
+  for(auto& character : extension) {
+    character = static_cast<char>(std::tolower(static_cast<unsigned char>(character)));
+  }
+
+  return extension;
+}
+
+static auto HasLoadableROMExtension(std::string const& path) -> bool {
+  const auto dot = path.find_last_of('.');
+  if(dot == std::string::npos) {
+    return false;
+  }
+
+  const auto extension = NormalizeExtension(path.substr(dot));
+  return extension == ".gba" || extension == ".bin" || extension == ".zip";
 }
 
 static auto FormatROMSizeLabel(size_t size) -> std::string {
@@ -159,7 +168,7 @@ static auto AddDirectoryEntries(
         clean_name.resize(semicolon_pos);
       }
 
-      if(!HasGBAExtension(clean_name)) {
+      if(!HasLoadableROMExtension(clean_name)) {
         continue;
       }
 
@@ -190,7 +199,7 @@ static auto AddDirectoryEntries(
     }
 
     const auto path = entry.path();
-    if(!HasGBAExtension(path.filename().string())) {
+    if(!HasLoadableROMExtension(path.filename().string())) {
       continue;
     }
 
@@ -204,6 +213,8 @@ auto ROMBrowser::Scan(DreamcastConfig const& config) -> std::vector<ROMEntry> {
 
   AddDirectoryEntries(config.rom_folder, seen, entries, config);
   AddDirectoryEntries("/cd", seen, entries, config);
+  // gpSPDC convention: ROMs and game_config.txt live under /cd/gbaDC on disc.
+  AddDirectoryEntries("/cd/gbaDC", seen, entries, config);
 
   if(!config.last_rom.empty()) {
     const fs::path last_path{config.last_rom};

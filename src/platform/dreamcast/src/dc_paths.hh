@@ -5,6 +5,7 @@
 
 #include "dc_config.hh"
 
+#include <algorithm>
 #include <filesystem>
 #include <sys/stat.h>
 
@@ -40,6 +41,21 @@ inline auto EnsureDirectoryPOSIX(std::string const& path) -> bool {
   }
   // errno EEXIST means the directory already exists.
   return errno == EEXIST;
+}
+
+inline auto GetSaveStatePath(
+  DreamcastConfig const& config,
+  fs::path const& rom_path,
+  int slot
+) -> fs::path {
+  const auto stem = rom_path.stem().string();
+  const auto slot_suffix = std::to_string(std::clamp(slot, 0, DreamcastConfig::kSaveStateSlotCount - 1));
+
+  if(!config.state_folder.empty()) {
+    return fs::path{config.state_folder} / (stem + ".ss" + slot_suffix);
+  }
+
+  return fs::path{DreamcastConfig::kDefaultStateFolder} / (stem + ".ss" + slot_suffix);
 }
 
 inline auto GetSavePath(DreamcastConfig const& config, fs::path const& rom_path) -> fs::path {

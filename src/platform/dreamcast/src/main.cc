@@ -6,6 +6,8 @@
 #include <nba/core.hh>
 #include <platform/loader/bios.hh>
 #include <platform/loader/rom.hh>
+#include <platform/loader/save_state.hh>
+#include <platform/writer/save_state.hh>
 #include <platform/frame_limiter.hh>
 
 #include "dc_config.hh"
@@ -19,6 +21,7 @@
 #include "device/dc_input.hh"
 #include "open_bios.hh"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
 #include <exception>
@@ -376,6 +379,8 @@ static auto LoadEmulator(
   bool rom_read_failed = false;
   float measured_fps = 0.0f;
   u32 measured_page_misses = 0;
+  std::string gameplay_overlay;
+  int gameplay_overlay_frames = 0;
 #if NBA_DC_HAS_KOS
   int fps_frame_count = 0;
   auto fps_last_update = std::chrono::steady_clock::now();
@@ -389,11 +394,59 @@ static auto LoadEmulator(
 #if !NBA_DC_HAS_KOS
     frame_limiter.Run([&]() {
 #endif
-      if(input.PollInput(*core)) {
+      DCGameplayRequest gameplay_request;
+      if(input.PollInput(*core, gameplay_request)) {
         running = false;
 #if !NBA_DC_HAS_KOS
         return;
 #endif
+      }
+
+      if(gameplay_request.save_slot_delta != 0) {
+        config->save_state_slot = std::clamp(
+          config->save_state_slot + gameplay_request.save_slot_delta,
+          0,
+          DreamcastConfig::kSaveStateSlotCount - 1
+        );
+        char slot_text[32];
+        std::snprintf(slot_text, sizeof(slot_text), "State slot %d", config->save_state_slot);
+        gameplay_overlay = slot_text;
+        gameplay_overlay_frames = 90;
+      }
+
+      if(gameplay_request.save_state) {
+        const auto state_path = GetSaveStatePath(*config, rom_path, config->save_state_slot);
+        const auto state_dir = state_path.parent_path().string();
+        if(!state_dir.empty()) {
+          EnsureDirectoryPOSIX(state_dir);
+        }
+
+        const auto result = SaveStateWriter::Write(core, state_path);
+        char slot_text[48];
+        std::snprintf(
+          slot_text,
+          sizeof(slot_text),
+          result == SaveStateWriter::Result::Success
+            ? "Saved state slot %d"
+            : "Save state failed",
+          config->save_state_slot
+        );
+        gameplay_overlay = slot_text;
+        gameplay_overlay_frames = 90;
+      } else if(gameplay_request.load_state) {
+        const auto state_path = GetSaveStatePath(*config, rom_path, config->save_state_slot);
+        const auto result = SaveStateLoader::Load(core, state_path);
+        char slot_text[48];
+        std::snprintf(
+          slot_text,
+          sizeof(slot_text),
+          result == SaveStateLoader::Result::Success
+            ? "Loaded state slot %d"
+            : "Load state failed",
+          config->save_state_slot
+        );
+        gameplay_overlay = slot_text;
+        gameplay_overlay_frames = 90;
       }
 
       if(running) {
@@ -473,6 +526,11 @@ static auto LoadEmulator(
 
     if(input.IsExitHintActive()) {
       video_device->DrawOverlay("Hold Start+A+B+X+Y to exit");
+    }
+
+    if(gameplay_overlay_frames > 0) {
+      video_device->DrawOverlay(gameplay_overlay.c_str());
+      gameplay_overlay_frames--;
     }
 #endif
   }
