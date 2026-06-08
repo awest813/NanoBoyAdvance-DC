@@ -63,10 +63,18 @@ static auto BuildROMLabel(
   label += ')';
 
   if(size > kStockDreamcastMaxROMSize && !CanLoadLargeROM(config)) {
-    label += " [Large ROMs]";
+    label += " [Locked]";
   }
 
   return label;
+}
+
+static auto IsROMEntryLaunchable(size_t size, DreamcastConfig const& config) -> bool {
+  if(size == 0) {
+    return true;
+  }
+
+  return size <= kStockDreamcastMaxROMSize || CanLoadLargeROM(config);
 }
 
 static auto AddROMEntry(
@@ -102,18 +110,22 @@ static auto AddROMEntry(
     label.resize(semicolon);
   }
 
+  const bool launchable = IsROMEntryLaunchable(have_size ? size : 0, config);
+
   seen.insert(entry_path);
   if(have_size) {
     entries.push_back(ROMEntry{
       entry_path,
       BuildROMLabel(std::move(label), size, config),
-      size
+      size,
+      launchable
     });
   } else {
     entries.push_back(ROMEntry{
       entry_path,
       std::move(label) + " (size unknown)",
-      0
+      0,
+      launchable
     });
   }
   return true;
@@ -234,13 +246,15 @@ auto ROMBrowser::Scan(DreamcastConfig const& config) -> std::vector<ROMEntry> {
           entries.push_back(ROMEntry{
             entry_path,
             BuildROMLabel(std::move(last_label), size, config) + " (last)",
-            size
+            size,
+            IsROMEntryLaunchable(size, config)
           });
         } else {
           entries.push_back(ROMEntry{
             entry_path,
             std::move(last_label) + " (size unknown) (last)",
-            0
+            0,
+            true
           });
         }
       }

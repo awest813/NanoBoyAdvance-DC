@@ -63,13 +63,17 @@ struct ROM {
     size_t size,
     std::unique_ptr<Backup>&& backup,
     std::unique_ptr<GPIO>&& gpio,
-    u32 rom_mask = 0x01FF'FFFF
+    u32 rom_mask = 0x01FF'FFFF,
+    size_t active_page_count = 0
   )   : rom_path(std::move(path))
       , rom_size(size)
       , backup_sram(nullptr)
       , backup_eeprom(nullptr)
       , gpio(std::move(gpio))
-      , rom_mask(rom_mask) {
+      , rom_mask(rom_mask)
+      , rom_active_page_count(active_page_count != 0
+          ? active_page_count
+          : (size > kLargeROMThreshold ? kPageCount : kSmallROMPageCount)) {
     rom_file = std::fopen(rom_path.c_str(), "rb");
 
     if(backup != nullptr) {
@@ -115,6 +119,7 @@ struct ROM {
     std::swap(rom_page_clock, other.rom_page_clock);
     std::swap(rom_read_error, other.rom_read_error);
     std::swap(rom_page_miss_count, other.rom_page_miss_count);
+    std::swap(rom_active_page_count, other.rom_active_page_count);
 #endif
     std::swap(backup_sram, other.backup_sram);
     std::swap(backup_eeprom, other.backup_eeprom);
@@ -568,7 +573,7 @@ private:
   }
 
   auto ActivePageCount() const -> size_t {
-    return rom_size > kLargeROMThreshold ? kPageCount : kSmallROMPageCount;
+    return rom_active_page_count;
   }
 #endif
 
@@ -578,6 +583,7 @@ private:
   size_t rom_size = 0;
   FILE* rom_file = nullptr;
   std::array<PagedROMPage, kPageCount> rom_pages;
+  size_t rom_active_page_count = kPageCount;
   u32 rom_page_clock = 0;
   u32 rom_page_miss_count = 0;
   bool rom_read_error = false;

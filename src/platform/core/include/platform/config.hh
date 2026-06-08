@@ -39,7 +39,9 @@ struct PlatformConfig : Config {
   } video;
 
   void Load(std::string const& path);
+  void LoadFromToml(toml::value const& data);
   void Save(std::string const& path);
+  auto BuildTomlDocument() -> toml::value;
 
 protected:
   virtual void LoadCustomData(toml::value const& data) {}

@@ -3,7 +3,11 @@
 
 #include "dc_config.hh"
 
+#include <platform/loader/dc_virtual_fs.hh>
+
 #include <algorithm>
+#include <cstdio>
+#include <sstream>
 
 namespace nba {
 
@@ -84,7 +88,42 @@ void DreamcastConfig::LoadDreamcast(std::string const& path) {
   SaveDreamcast(path);
 }
 
+void DreamcastConfig::TryLoadDreamcast(std::string const& path) {
+  ApplyDefaults();
+
+  std::string content;
+  if(!ReadDreamcastTextFile(path, content)) {
+    std::printf("[NBA-DC] Config: using defaults (%s not found or unreadable)\n", path.c_str());
+    std::fflush(stdout);
+    return;
+  }
+
+  try {
+    LoadFromToml(toml::parse(content));
+    std::printf("[NBA-DC] Config: loaded %s\n", path.c_str());
+    std::fflush(stdout);
+  } catch(std::exception const& ex) {
+    std::printf("[NBA-DC] Config: parse error in %s (%s), using defaults\n", path.c_str(), ex.what());
+    std::fflush(stdout);
+    ApplyDefaults();
+  }
+}
+
 void DreamcastConfig::SaveDreamcast(std::string const& path) {
+  const auto path_string = path.string();
+  if(path_string.rfind("/pc/", 0) == 0 || path_string.rfind("/cd/", 0) == 0) {
+    const auto data = BuildTomlDocument();
+    std::ostringstream stream;
+    stream << data;
+    if(WriteDreamcastTextFile(path_string, stream.str())) {
+      return;
+    }
+
+    std::printf("[NBA-DC] Config: failed to write %s\n", path_string.c_str());
+    std::fflush(stdout);
+    return;
+  }
+
   Save(path);
 }
 

@@ -37,6 +37,9 @@ struct DreamcastConfig : PlatformConfig {
   // called when the user explicitly switches profiles in the settings menu.
   void ApplyPerformanceProfile(PerformanceProfile profile);
   void LoadDreamcast(std::string const& path);
+  // Loads settings from a Dreamcast virtual path without std::filesystem or
+  // auto-creating missing files.  Falls back to defaults when unreadable.
+  void TryLoadDreamcast(std::string const& path);
   void SaveDreamcast(std::string const& path);
 
   static auto ProfileName(PerformanceProfile profile) -> const char*;

@@ -249,8 +249,20 @@ auto DCFrontend::Run(
     } else if(menu.down) {
       selection = (selection + 1) % static_cast<int>(entries.size());
     } else if(menu.confirm) {
-      config.last_rom = entries[selection].path.string();
-      return Result{Action::LaunchROM, entries[selection].path};
+      const auto& entry = entries[selection];
+      if(!entry.launchable) {
+        ui.ShowMessage(
+          "ROM Locked",
+          "This ROM exceeds the 8 MiB stock\nlimit.\n\n"
+          "Enable Large ROMs in Settings\nor use a 32 MB RAM mod.",
+          input,
+          true
+        );
+        continue;
+      }
+
+      config.last_rom = entry.path.string();
+      return Result{Action::LaunchROM, entry.path};
     } else if(menu.settings) {
       DCSettingsMenu::Run(ui, input, config);
       return Result{Action::OpenSettings, {}};

@@ -219,7 +219,8 @@ auto ROMLoader::Load(
       return Result::BadImage;
     }
 
-    if(kDreamcastForceFlatSmallROMs && size <= kDreamcastFlatROMLimit) {
+    if((kDreamcastForceFlatSmallROMs || ShouldUseFlatDreamcastROM(size)) &&
+        size <= kDreamcastFlatROMLimit) {
       DreamcastLoaderTrace("7C flat small-ROM selected", rom_path, size);
 
       auto file_data = std::vector<u8>{};
@@ -367,13 +368,15 @@ auto ROMLoader::Load(
       rom_mask = u32(RoundSizeToPowerOfTwo(size) - 1);
     }
 
+    const auto page_count = DreamcastPagedROMPageCount(size);
     DreamcastLoaderTrace("7J paged attach begin", rom_path, size);
     core->Attach(ROM{
       resolved_path,
       size,
       std::move(backup),
       std::move(gpio),
-      rom_mask
+      rom_mask,
+      page_count
     });
     DreamcastLoaderTrace("7J paged attach ok", rom_path, size);
 

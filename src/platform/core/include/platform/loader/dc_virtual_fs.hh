@@ -13,6 +13,13 @@
 
 #include <sys/stat.h>
 
+#if __has_include(<arch/arch.h>)
+#define NBA_DC_VFS_HAS_ARCH 1
+#include <arch/arch.h>
+#else
+#define NBA_DC_VFS_HAS_ARCH 0
+#endif
+
 namespace fs = std::filesystem;
 
 namespace nba {
@@ -117,6 +124,85 @@ inline auto GetDreamcastVirtualFileSize(
 
   std::fclose(file);
   return file_size > 0;
+}
+
+inline auto HasExtendedRAM() -> bool {
+#if NBA_DC_VFS_HAS_ARCH
+  return DBL_MEM != 0;
+#else
+  return false;
+#endif
+}
+
+inline auto DreamcastPagedROMPageCount(size_t rom_size) -> size_t {
+  static constexpr size_t kLargeROMThreshold = 8 * 1024 * 1024;
+  static constexpr size_t kSmallROMPageCount = 2;
+  static constexpr size_t kLargeROMPageCountExtended = 4;
+  static constexpr size_t kLargeROMPageCountStock = 2;
+
+  if(rom_size <= kLargeROMThreshold) {
+    return kSmallROMPageCount;
+  }
+
+  return HasExtendedRAM() ? kLargeROMPageCountExtended : kLargeROMPageCountStock;
+}
+
+inline auto ShouldUseFlatDreamcastROM(size_t rom_size) -> bool {
+  static constexpr size_t kFlatROMLimit = 8 * 1024 * 1024;
+  return HasExtendedRAM() && rom_size <= kFlatROMLimit;
+}
+
+inline auto ReadDreamcastTextFile(std::string const& path, std::string& content) -> bool {
+  content.clear();
+
+  auto* file = OpenDreamcastVirtualFile(fs::path{path});
+  if(!file) {
+    file = std::fopen(path.c_str(), "rb");
+  }
+  if(!file) {
+    return false;
+  }
+
+  if(std::fseek(file, 0, SEEK_END) != 0) {
+    std::fclose(file);
+    return false;
+  }
+
+  const auto size = std::ftell(file);
+  if(size <= 0) {
+    std::fclose(file);
+    return false;
+  }
+
+  content.resize(static_cast<size_t>(size));
+  if(std::fseek(file, 0, SEEK_SET) != 0) {
+    std::fclose(file);
+    content.clear();
+    return false;
+  }
+
+  const auto read = std::fread(content.data(), 1, content.size(), file);
+  std::fclose(file);
+  if(read != content.size()) {
+    content.clear();
+    return false;
+  }
+
+  return true;
+}
+
+inline auto WriteDreamcastTextFile(std::string const& path, std::string const& content) -> bool {
+  auto* file = std::fopen(path.c_str(), "wb");
+  if(!file) {
+    return false;
+  }
+
+  const auto written = content.empty()
+    ? 0
+    : std::fwrite(content.data(), 1, content.size(), file);
+  const bool flushed = std::fflush(file) == 0;
+  const bool closed = std::fclose(file) == 0;
+  return written == content.size() && flushed && closed;
 }
 
 } // namespace nba
