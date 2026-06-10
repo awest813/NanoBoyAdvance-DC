@@ -104,9 +104,11 @@ void PPU::BeginHDrawVDraw() {
   auto& dispstat = mmio.dispstat;
   auto& vcount = mmio.vcount;
 
-  DrawBackground();
-  DrawWindow();
-  DrawMerge();
+  if(!config->suppress_video_draw) {
+    DrawBackground();
+    DrawWindow();
+    DrawMerge();
+  }
 
   scheduler.Add(1, Scheduler::EventClass::PPU_update_vcount_flag);
   scheduler.Add(40, Scheduler::EventClass::PPU_latch_dispcnt);
@@ -150,7 +152,9 @@ void PPU::BeginHDrawVBlank() {
   auto& vcount = mmio.vcount;
   auto& dispstat = mmio.dispstat;
 
-  DrawWindow();
+  if(!config->suppress_video_draw) {
+    DrawWindow();
+  }
 
   scheduler.Add(1, Scheduler::EventClass::PPU_update_vcount_flag);
 
@@ -208,7 +212,7 @@ void PPU::BeginHBlankVBlank() {
 void PPU::BeginSpriteDrawing() {
   const uint vcount = mmio.vcount;
 
-  if(vcount < 160U) {
+  if(vcount < 160U && !config->suppress_video_draw) {
     DrawSprite();
   }
 

@@ -113,12 +113,12 @@ static auto UpdateAutoFrameSkip(
   }
 
   int next_frame_skip = current_frame_skip;
-  if(measured_fps < 53.0f && current_frame_skip < 3) {
+  if(measured_fps < 55.0f && current_frame_skip < 3) {
     next_frame_skip++;
     recovery_ticks = 0;
-  } else if(measured_fps > 58.5f && current_frame_skip > 0) {
+  } else if(measured_fps > 57.5f && current_frame_skip > 0) {
     recovery_ticks++;
-    if(recovery_ticks >= 5) {
+    if(recovery_ticks >= 3) {
       next_frame_skip--;
       recovery_ticks = 0;
     }

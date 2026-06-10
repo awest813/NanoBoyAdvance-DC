@@ -206,7 +206,15 @@ struct ROM {
     }
 
     rom_read_error = false;
-    return LoadPagedROM(0) != nullptr;
+    if(LoadPagedROM(0) == nullptr) {
+      return false;
+    }
+
+    if(kPageSize < rom_size) {
+      PrefetchPagedROM(kPageSize, rom_last_page);
+    }
+
+    return true;
   }
 
   auto HasReadError() const -> bool {
@@ -436,7 +444,7 @@ private:
 
 #if defined(PLATFORM_DREAMCAST)
   struct PagedROMPage {
-    std::vector<u8> data;
+    std::array<u8, kPageSize> data{};
     u32 start = 0;
     u32 last_used = 0;
     bool valid = false;
@@ -477,10 +485,6 @@ private:
   }
 
   auto ReadPagedROMBytes(PagedROMPage& page, u32 page_start, size_t bytes_to_read) -> bool {
-    if(page.data.empty()) {
-      page.data.resize(kPageSize);
-    }
-
     const auto file_offset = static_cast<long>(page_start);
     if(rom_file_pos != file_offset) {
       if(std::fseek(rom_file, file_offset, SEEK_SET) != 0) {

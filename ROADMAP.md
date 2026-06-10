@@ -113,6 +113,9 @@ without full-ROM allocations or undefined behavior after media failures.
 - [x] Tune paged-ROM cache hot path (last-page hint, sequential fread, safer prefetch).
 - [x] Use RGB565 lookup tables for gameplay frame conversion.
 - [x] Enable Auto frame skip by default on the Speed profile.
+- [x] Skip PPU scanline rasterization on suppressed frame-skip frames.
+- [x] Use fixed-size paged-ROM buffers and preload ROM page 1 at attach.
+- [x] Speed profile skips BIOS splash and disables MP2K cubic filtering.
 - [ ] Lock the benchmark ROM set in `COMPATIBILITY.md`.
 - [ ] Capture baseline FPS per profile on retail hardware.
 - [ ] Tune CPU/audio/video/cache hot paths against recorded baselines.

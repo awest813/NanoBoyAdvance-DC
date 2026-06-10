@@ -282,10 +282,10 @@ knobs. Pick the highest-fidelity profile a given game can sustain at full speed.
   already hold full speed and benefit from accurate audio.
 - **Balanced** (default) – native audio with cheap interpolation and no frame
   skipping. Good fidelity with CPU headroom on most games.
-- **Speed** – HLE audio bypasses the GBA sound CPU and **Auto frame skip**
-  scales skipped emulated frames under load (skipped frames no longer pay the
-  PVR texture conversion cost). Best for the heaviest titles (3D/Mode-7-heavy
-  games).
+- **Speed** – HLE audio bypasses the GBA sound CPU, BIOS splash is skipped, and
+  **Auto frame skip** scales skipped emulated frames under load (skipped frames
+  skip PPU rasterization and PVR texture conversion). Best for the heaviest
+  titles (3D/Mode-7-heavy games).
 
 Switching profiles overwrites Frame skip, disables Auto frame skip, and rewrites
 Audio buffer; adjust those rows afterward to fine-tune within a profile.
