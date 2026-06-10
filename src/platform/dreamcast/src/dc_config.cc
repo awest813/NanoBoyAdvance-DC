@@ -103,7 +103,7 @@ void DreamcastConfig::TryLoadDreamcast(std::string const& path) {
   }
 
   try {
-    LoadFromToml(toml::parse(content));
+    LoadFromToml(toml::parse_str(content));
     std::printf("[NBA-DC] Config: loaded %s\n", path.c_str());
     std::fflush(stdout);
   } catch(std::exception const& ex) {

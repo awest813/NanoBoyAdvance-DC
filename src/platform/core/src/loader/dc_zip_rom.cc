@@ -51,7 +51,7 @@ auto OpenZipArchive(fs::path const& path, mz_zip_archive& archive) -> bool {
       continue;
     }
 
-    if(mz_zip_reader_init_cfile(&archive, file, 0)) {
+    if(mz_zip_reader_init_cfile(&archive, file, 0, 0)) {
       return true;
     }
 

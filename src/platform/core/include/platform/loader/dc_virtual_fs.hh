@@ -78,9 +78,11 @@ inline auto GetDreamcastVirtualFileSize(
 
   for(auto const& candidate : DreamcastVirtualPathCandidates(path)) {
     struct stat st {};
-    if(::stat(candidate.c_str(), &st) == 0 && S_ISREG(st.st_mode) && st.st_size >= 0) {
+    if(::stat(candidate.c_str(), &st) == 0 && S_ISREG(st.st_mode) && st.st_size > 0) {
       file_size = static_cast<size_t>(st.st_size);
-      return file_size <= max_size;
+      if(file_size <= max_size) {
+        return true;
+      }
     }
   }
 

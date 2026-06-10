@@ -13,7 +13,7 @@ namespace nba {
 // gpSP-compatible game_config.txt idle-loop hints (data only, MIT implementation).
 struct DreamcastIdleConfig {
   static auto LookupIdleLoopTarget(Header const& header) -> u32;
-  static void ApplyTo(Config& config, Header const& header) -> void;
+  static auto ApplyTo(Config& config, Header const& header) -> void;
 };
 
 #endif

@@ -26,6 +26,18 @@ set(HEADERS_PUBLIC
 
 set(HEADERS)
 
+if(PLATFORM_DREAMCAST)
+  list(APPEND SOURCES
+    src/loader/dc_zip_rom.cc
+    src/loader/dc_idle_config.cc
+  )
+
+  list(APPEND HEADERS_PUBLIC
+    include/platform/loader/dc_zip_rom.hh
+    include/platform/loader/dc_idle_config.hh
+  )
+endif()
+
 if(NOT PLATFORM_DREAMCAST)
   find_package(OpenGL REQUIRED)
   find_package(SDL3 REQUIRED COMPONENTS SDL3)
@@ -57,16 +69,6 @@ target_sources(platform-core PRIVATE ${SOURCES} ${HEADERS} ${HEADERS_PUBLIC})
 target_include_directories(platform-core PRIVATE src PUBLIC include)
 
 if(PLATFORM_DREAMCAST)
-  list(APPEND SOURCES
-    src/loader/dc_zip_rom.cc
-    src/loader/dc_idle_config.cc
-  )
-
-  list(APPEND HEADERS_PUBLIC
-    include/platform/loader/dc_zip_rom.hh
-    include/platform/loader/dc_idle_config.hh
-  )
-
   target_link_libraries(platform-core PUBLIC nba toml11::toml11 PRIVATE unarr miniz)
 else()
   target_link_libraries(platform-core PUBLIC nba toml11::toml11 SDL3::SDL3 OpenGL::GL glad PRIVATE unarr)

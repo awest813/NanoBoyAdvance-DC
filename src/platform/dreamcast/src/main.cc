@@ -24,6 +24,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <exception>
 #include <memory>
 #include <string>
@@ -75,6 +76,17 @@ static auto GetROMSourceName(fs::path const& path) -> const char* {
   }
 
   return "Unknown";
+}
+
+static auto ParsePositiveEnvInt(char const* name) -> int {
+  if(const char* value = std::getenv(name)) {
+    char* end = nullptr;
+    const long parsed = std::strtol(value, &end, 10);
+    if(end != value && parsed > 0) {
+      return static_cast<int>(parsed);
+    }
+  }
+  return 0;
 }
 
 static auto FormatROMSize(size_t size) -> std::string {
@@ -419,6 +431,8 @@ static auto LoadEmulator(
   cheats.LoadForROM(rom_path);
   breadcrumb("Phase 9: Enter frame loop");
 
+  const int max_frames = ParsePositiveEnvInt("NBA_DC_MAX_FRAMES");
+  int frames_run = 0;
   bool running = true;
   bool rom_read_failed = false;
   float measured_fps = 0.0f;
@@ -497,6 +511,18 @@ static auto LoadEmulator(
             rom_read_failed = true;
             running = false;
             break;
+          }
+        }
+
+        if(max_frames > 0) {
+          frames_run++;
+          if(frames_run >= max_frames) {
+            std::printf(
+              "[NBA-DC] Smoke test: ran %d frame(s), exiting\n",
+              frames_run
+            );
+            std::fflush(stdout);
+            running = false;
           }
         }
       }
@@ -673,6 +699,19 @@ int main(int argc, char** argv) {
 
   ui.DrawStatusBar("Loading frontend...");
   ui.Present();
+
+  if(const char* autoboot_env = std::getenv("NBA_DC_AUTOBOOT_ROM")) {
+    std::printf("[NBA-DC] Autoboot env ROM: %s\n", autoboot_env);
+    std::fflush(stdout);
+    const bool loaded = RunLoadEmulator(
+      ui,
+      input,
+      config,
+      video_device,
+      fs::path{autoboot_env}
+    );
+    return loaded ? 0 : 1;
+  }
 
   if(kDreamcastAutobootTekken) {
     std::string autoboot_report;
