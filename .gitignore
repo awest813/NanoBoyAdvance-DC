@@ -20,3 +20,5 @@ cmake-build-*
 dreamsdk.conf
 *.elf
 build-dc/
+test-fixtures/
+test-media/

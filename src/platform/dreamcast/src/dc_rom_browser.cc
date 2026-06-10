@@ -72,7 +72,7 @@ static auto BuildROMLabel(
   label += ')';
 
   if(size > kStockDreamcastMaxROMSize && !CanLoadLargeROM(config)) {
-    label += " [Locked]";
+    label += " [Large ROMs]";
   }
 
   return label;

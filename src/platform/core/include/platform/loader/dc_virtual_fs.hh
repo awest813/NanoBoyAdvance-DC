@@ -159,6 +159,11 @@ inline auto ShouldUseFlatDreamcastROM(size_t rom_size) -> bool {
 inline auto ReadDreamcastTextFile(std::string const& path, std::string& content) -> bool {
   content.clear();
 
+  size_t file_size = 0;
+  if(!GetDreamcastVirtualFileSize(fs::path{path}, file_size) || file_size == 0) {
+    return false;
+  }
+
   auto* file = OpenDreamcastVirtualFile(fs::path{path});
   if(!file) {
     file = std::fopen(path.c_str(), "rb");
@@ -167,24 +172,7 @@ inline auto ReadDreamcastTextFile(std::string const& path, std::string& content)
     return false;
   }
 
-  if(std::fseek(file, 0, SEEK_END) != 0) {
-    std::fclose(file);
-    return false;
-  }
-
-  const auto size = std::ftell(file);
-  if(size <= 0) {
-    std::fclose(file);
-    return false;
-  }
-
-  content.resize(static_cast<size_t>(size));
-  if(std::fseek(file, 0, SEEK_SET) != 0) {
-    std::fclose(file);
-    content.clear();
-    return false;
-  }
-
+  content.resize(file_size);
   const auto read = std::fread(content.data(), 1, content.size(), file);
   std::fclose(file);
   if(read != content.size()) {

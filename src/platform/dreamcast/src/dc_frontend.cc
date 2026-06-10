@@ -297,7 +297,7 @@ auto DCFrontend::Run(
       const auto& entry = entries[selection];
       if(!entry.launchable) {
         ui.ShowMessage(
-          "ROM Locked",
+          "Large ROM Required",
           "This ROM exceeds the 8 MiB stock\nlimit.\n\n"
           "Enable Large ROMs in Settings\nor use a 32 MB RAM mod.",
           input,

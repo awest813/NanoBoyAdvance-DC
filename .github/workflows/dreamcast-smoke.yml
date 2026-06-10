@@ -1,0 +1,33 @@
+name: Dreamcast Smoke Test
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'src/**'
+      - 'cmake/**'
+      - 'thirdparty/miniz/**'
+      - 'scripts/dc-smoke-test.sh'
+      - 'scripts/generate-dc-test-rom.py'
+      - '.github/workflows/dreamcast-smoke.yml'
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'cmake/**'
+      - 'thirdparty/miniz/**'
+      - 'scripts/dc-smoke-test.sh'
+      - 'scripts/generate-dc-test-rom.py'
+      - '.github/workflows/dreamcast-smoke.yml'
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build g++-12 gcc-12 python3
+      - name: Run Dreamcast host smoke tests
+        run: bash scripts/dc-smoke-test.sh
