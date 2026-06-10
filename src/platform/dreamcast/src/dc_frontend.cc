@@ -297,9 +297,9 @@ auto DCFrontend::Run(
       const auto& entry = entries[selection];
       if(!entry.launchable) {
         ui.ShowMessage(
-          "Large ROM Required",
-          "This ROM exceeds the 8 MiB stock\nlimit.\n\n"
-          "Enable Large ROMs in Settings\nor use a 32 MB RAM mod.",
+          "Large ROM Unavailable",
+          "This ROM is larger than 8 MiB and\nneeds more RAM than stock Dreamcast\n"
+          "provides.\n\nEnable \"Large ROMs\" in Settings\n(for a 32 MB RAM mod) to play it.",
           input,
           true
         );

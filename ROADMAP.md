@@ -86,8 +86,13 @@ without full-ROM allocations or undefined behavior after media failures.
   buffer, BIOS path, ROM folder, and save folder.
 - [x] Store per-ROM saves under `/pc/saves/<rom>.sav`.
 - [x] Add VMU A1 save option with VMU-safe short filenames.
-- [ ] Re-enable safe config load/save once Flycast `/pc` behavior is fully
-  understood.
+- [x] Re-enable safe config load at startup via a virtual-FS text read and
+  in-memory TOML parse (no `std::filesystem`, no write-on-miss), so saved
+  settings survive a reboot without risking the Flycast `/pc` hang.
+- [x] Add a guarded one-shot config save (serialize to memory, single
+  `fopen("wb")`) used by the settings menu and automatically before each ROM
+  launch, so `last_rom` and settings persist without a filesystem-based
+  read-modify-write that could hang on Flycast.
 - [x] Add gameplay save-state hotkeys (10 slots under `/pc/states`, gpSPDC-style
   L+R+Start/Select shortcuts).
 - [x] Scan gpSPDC-style `/cd/gbaDC` and accept `.bin`/`.zip` ROMs in the browser.
@@ -96,7 +101,9 @@ without full-ROM allocations or undefined behavior after media failures.
 - [x] Improve save UX for in-memory-only sessions: attempt a clean full-buffer
   save flush on exit when streaming writes were unavailable, and tell the user
   whether their progress was persisted.
-- [ ] Add clearer browser affordances for unavailable large ROMs on stock RAM.
+- [x] Add clearer browser affordances for unavailable large ROMs on stock RAM:
+  oversized ROMs are tagged `[Needs Large ROMs]` and selecting one shows an
+  explanatory message instead of launching into a fatal-error screen.
 
 ## Milestone 3: Performance + Compatibility
 

@@ -105,6 +105,12 @@ void DreamcastConfig::TryLoadDreamcast(std::string const& path) {
     return;
   }
 
+  if(content.empty()) {
+    std::printf("[NBA-DC] Config: empty file at %s, using defaults\n", path.c_str());
+    std::fflush(stdout);
+    return;
+  }
+
   try {
     LoadFromToml(toml::parse_str(content));
     std::printf("[NBA-DC] Config: loaded %s\n", path.c_str());
@@ -119,19 +125,34 @@ void DreamcastConfig::TryLoadDreamcast(std::string const& path) {
 void DreamcastConfig::SaveDreamcast(std::string const& path) {
   const auto path_string = path;
   if(path_string.rfind("/pc/", 0) == 0 || path_string.rfind("/cd/", 0) == 0) {
-    const auto data = BuildTomlDocument();
-    std::ostringstream stream;
-    stream << data;
-    if(WriteDreamcastTextFile(path_string, stream.str())) {
-      return;
-    }
-
-    std::printf("[NBA-DC] Config: failed to write %s\n", path_string.c_str());
-    std::fflush(stdout);
+    SaveDreamcastSafe(path_string);
     return;
   }
 
   Save(path);
+}
+
+auto DreamcastConfig::SaveDreamcastSafe(std::string const& path) -> bool {
+  std::string content;
+  try {
+    toml::value data;
+    SaveToData(data);
+    std::ostringstream stream;
+    stream << data;
+    content = stream.str();
+  } catch(std::exception const& ex) {
+    std::printf("[NBA-DC] Config: serialize error for %s (%s)\n", path.c_str(), ex.what());
+    std::fflush(stdout);
+    return false;
+  }
+
+  const bool ok = WriteDreamcastTextFile(path, content);
+
+  std::printf("[NBA-DC] Config: save %s %s (%lu bytes)\n",
+              path.c_str(), ok ? "ok" : "failed",
+              static_cast<unsigned long>(content.size()));
+  std::fflush(stdout);
+  return ok;
 }
 
 void DreamcastConfig::LoadCustomData(toml::value const& data) {

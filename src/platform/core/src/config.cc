@@ -23,6 +23,10 @@ void PlatformConfig::Load(std::string const& path) {
 }
 
 void PlatformConfig::LoadFromToml(toml::value const& data) {
+  LoadFromData(data);
+}
+
+void PlatformConfig::LoadFromData(toml::value const& data) {
   if(data.contains("general")) {
     auto general = data.at("general");
     this->bios_path = toml::find_or<std::string>(general, "bios_path", "bios.bin");
@@ -122,7 +126,11 @@ void PlatformConfig::LoadFromToml(toml::value const& data) {
 
 auto PlatformConfig::BuildTomlDocument() -> toml::value {
   toml::value data;
+  SaveToData(data);
+  return data;
+}
 
+void PlatformConfig::SaveToData(toml::value& data) {
   // General
   data["general"]["bios_path"]   = this->bios_path;
   data["general"]["bios_skip"]   = this->skip_bios;
@@ -184,7 +192,6 @@ auto PlatformConfig::BuildTomlDocument() -> toml::value {
   data["audio"]["mp2k_hle_force_reverb"] = this->audio.mp2k_hle_force_reverb;
 
   SaveCustomData(data);
-  return data;
 }
 
 void PlatformConfig::Save(std::string const& path) {

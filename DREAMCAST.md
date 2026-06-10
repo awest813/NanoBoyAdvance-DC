@@ -118,8 +118,12 @@ Writable `/pc` paths require an SD/IDE adapter or equivalent host filesystem mou
   (>8 MiB)** is enabled in Settings.  On a 32 MB RAM mod (or Flycast with
   `RamMod32MB`), KallistiOS reports extended RAM via `DBL_MEM` and large ROMs
   are allowed automatically.
-- The ROM browser shows each cartridge size and marks titles that need the
-  Large ROMs setting with `[Large ROMs]`.
+- The ROM browser shows each cartridge size and marks titles that exceed the
+  stock 8 MiB limit on the current RAM configuration with `[Needs Large ROMs]`.
+  Selecting such a title does not launch it; the browser shows a message
+  explaining that the **Large ROMs** setting (or a 32 MB RAM mod) is required.
+  Enabling **Large ROMs** in Settings and returning rescans the list, clearing
+  the tag for ROMs that now fit.
 - `.zip` ROMs are opened with [miniz](https://github.com/richgel999/miniz)
   (public domain) and streamed from disc without buffering the whole archive in
   RAM.  The inner `.gba`/`.bin` is extracted once to `/pc/roms/.cache/` and
@@ -181,6 +185,24 @@ When **Frame skip** is set to **Auto**, the runtime raises the active skip value
 when measured FPS drops below the full-speed target and slowly lowers it after
 several stable samples. The FPS overlay shows this as `FSA<n>`; manual mode is
 shown as `FS <n>`.
+
+### Settings Persistence
+
+- Settings are saved to `/pc/nba-dc.toml`:
+  - when you choose **Save and return** in the settings menu, and
+  - automatically right before a ROM launches, so the **last played ROM**
+    (`last_rom`) is remembered and pre-selected in the browser next time.
+- Both saves use a guarded one-shot writer: the config is serialized to memory
+  and written with a single `fopen("wb")`. It avoids `std::filesystem` and the
+  read-modify-write (re-parsing the existing file) that the regular save path
+  performs, so it will not hang on Flycast's `/pc/` virtual filesystem.
+- At startup the emulator loads that file with a matching guarded reader: it
+  probes the file with `fopen` and parses it from memory, so it never calls
+  `std::filesystem` and never writes a new file on a miss. This keeps saved
+  settings across reboots without risking a Flycast `/pc/` hang.
+- If the file is missing or malformed, the emulator silently falls back to
+  defaults; the `[NBA-DC] Config:` lines on stdout report which path was taken
+  and whether each save succeeded.
 
 ## Hardware Mapping (Gameplay)
 
