@@ -120,6 +120,8 @@ struct ROM {
     std::swap(rom_read_error, other.rom_read_error);
     std::swap(rom_page_miss_count, other.rom_page_miss_count);
     std::swap(rom_active_page_count, other.rom_active_page_count);
+    std::swap(rom_last_page, other.rom_last_page);
+    std::swap(rom_file_pos, other.rom_file_pos);
 #endif
     std::swap(backup_sram, other.backup_sram);
     std::swap(backup_eeprom, other.backup_eeprom);
@@ -445,12 +447,65 @@ private:
       std::fclose(rom_file);
       rom_file = nullptr;
     }
+    rom_file_pos = -1;
+    rom_last_page = nullptr;
   }
 
   // Resolves the page containing `address`, reading it from the backing file
   // (with LRU eviction) on a cache miss.  Returns the resident page, or nullptr
   // on a media read failure.  Returning the page directly lets callers read
   // straight from the page buffer instead of re-scanning the cache.
+  auto SelectPagedROMEvictionTarget(size_t active_pages, PagedROMPage* exclude) -> PagedROMPage* {
+    auto* target = static_cast<PagedROMPage*>(nullptr);
+
+    for(size_t page_index = 0; page_index < active_pages; page_index++) {
+      auto& page = rom_pages[page_index];
+      if(&page == exclude) {
+        continue;
+      }
+
+      if(!page.valid) {
+        return &page;
+      }
+
+      if(target == nullptr || page.last_used < target->last_used) {
+        target = &page;
+      }
+    }
+
+    return target;
+  }
+
+  auto ReadPagedROMBytes(PagedROMPage& page, u32 page_start, size_t bytes_to_read) -> bool {
+    if(page.data.empty()) {
+      page.data.resize(kPageSize);
+    }
+
+    const auto file_offset = static_cast<long>(page_start);
+    if(rom_file_pos != file_offset) {
+      if(std::fseek(rom_file, file_offset, SEEK_SET) != 0) {
+        rom_file_pos = -1;
+        return false;
+      }
+    }
+
+    const auto bytes_read = std::fread(page.data.data(), 1, bytes_to_read, rom_file);
+    rom_file_pos = file_offset + static_cast<long>(bytes_read);
+
+    if(bytes_read < bytes_to_read) {
+      if(page_start + bytes_to_read >= rom_size) {
+        std::memset(page.data.data() + bytes_read, 0, kPageSize - bytes_read);
+      } else {
+        rom_file_pos = -1;
+        return false;
+      }
+    } else if(bytes_read < kPageSize) {
+      std::memset(page.data.data() + bytes_read, 0, kPageSize - bytes_read);
+    }
+
+    return true;
+  }
+
   auto LoadPagedROM(u32 address) -> PagedROMPage* {
     if(!rom_file) {
       rom_read_error = true;
@@ -461,25 +516,24 @@ private:
     const size_t active_pages = ActivePageCount();
     rom_page_clock++;
 
+    if(rom_last_page && rom_last_page->valid && rom_last_page->start == page_start) {
+      rom_last_page->last_used = rom_page_clock;
+      return rom_read_error ? nullptr : rom_last_page;
+    }
+
     for(size_t page_index = 0; page_index < active_pages; page_index++) {
       auto& page = rom_pages[page_index];
       if(page.valid && page.start == page_start) {
         page.last_used = rom_page_clock;
-        return rom_read_error ? nullptr : &page;
+        rom_last_page = &page;
+        return rom_read_error ? nullptr : rom_last_page;
       }
     }
 
-    auto* target = &rom_pages[0];
-    for(size_t page_index = 0; page_index < active_pages; page_index++) {
-      auto& page = rom_pages[page_index];
-      if(!page.valid) {
-        target = &page;
-        break;
-      }
-
-      if(page.last_used < target->last_used) {
-        target = &page;
-      }
+    auto* target = SelectPagedROMEvictionTarget(active_pages, nullptr);
+    if(target == nullptr) {
+      rom_read_error = true;
+      return nullptr;
     }
 
     rom_page_miss_count++;
@@ -489,43 +543,26 @@ private:
       bytes_to_read = rom_size - page_start;
     }
 
-    if(target->data.empty()) {
-      target->data.resize(kPageSize);
-    }
-
-    if(std::fseek(rom_file, static_cast<long>(page_start), SEEK_SET) != 0) {
+    if(!ReadPagedROMBytes(*target, page_start, bytes_to_read)) {
       rom_read_error = true;
       target->valid = false;
+      rom_last_page = nullptr;
       return nullptr;
-    }
-
-    const auto bytes_read = std::fread(target->data.data(), 1, bytes_to_read, rom_file);
-
-    if(bytes_read < bytes_to_read) {
-      if(page_start + bytes_to_read >= rom_size) {
-        // Final ROM page may be smaller than kPageSize; pad the remainder.
-        std::memset(target->data.data() + bytes_read, 0, kPageSize - bytes_read);
-      } else {
-        rom_read_error = true;
-        target->valid = false;
-        return nullptr;
-      }
-    } else if(bytes_read < kPageSize) {
-      std::memset(target->data.data() + bytes_read, 0, kPageSize - bytes_read);
     }
 
     target->start = page_start;
     target->last_used = rom_page_clock;
     target->valid = true;
+    rom_last_page = target;
 
     if(page_start + kPageSize < rom_size) {
-      PrefetchPagedROM(page_start + kPageSize);
+      PrefetchPagedROM(page_start + kPageSize, target);
     }
 
     return target;
   }
 
-  void PrefetchPagedROM(u32 address) {
+  void PrefetchPagedROM(u32 address, PagedROMPage* exclude) {
     if(!rom_file || address >= rom_size) {
       return;
     }
@@ -540,17 +577,9 @@ private:
       }
     }
 
-    auto* target = &rom_pages[0];
-    for(size_t page_index = 0; page_index < active_pages; page_index++) {
-      auto& page = rom_pages[page_index];
-      if(!page.valid) {
-        target = &page;
-        break;
-      }
-
-      if(page.last_used < target->last_used) {
-        target = &page;
-      }
+    auto* target = SelectPagedROMEvictionTarget(active_pages, exclude);
+    if(target == nullptr) {
+      return;
     }
 
     size_t bytes_to_read = kPageSize;
@@ -558,24 +587,8 @@ private:
       bytes_to_read = rom_size - page_start;
     }
 
-    if(target->data.empty()) {
-      target->data.resize(kPageSize);
-    }
-
-    if(std::fseek(rom_file, static_cast<long>(page_start), SEEK_SET) != 0) {
+    if(!ReadPagedROMBytes(*target, page_start, bytes_to_read)) {
       return;
-    }
-
-    const auto bytes_read = std::fread(target->data.data(), 1, bytes_to_read, rom_file);
-
-    if(bytes_read < bytes_to_read) {
-      if(page_start + bytes_to_read < rom_size) {
-        return;
-      }
-
-      std::memset(target->data.data() + bytes_read, 0, kPageSize - bytes_read);
-    } else if(bytes_read < kPageSize) {
-      std::memset(target->data.data() + bytes_read, 0, kPageSize - bytes_read);
     }
 
     target->start = page_start;
@@ -650,6 +663,8 @@ private:
   u32 rom_page_clock = 0;
   u32 rom_page_miss_count = 0;
   bool rom_read_error = false;
+  PagedROMPage* rom_last_page = nullptr;
+  long rom_file_pos = -1;
 #endif
   std::unique_ptr<Backup> backup_sram;
   std::unique_ptr<Backup> backup_eeprom;

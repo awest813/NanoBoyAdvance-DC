@@ -506,6 +506,7 @@ static auto LoadEmulator(
         cheats.Apply(*core);
 
         for(int skip = 0; skip <= active_frame_skip; skip++) {
+          config->suppress_video_draw = skip < active_frame_skip;
           core->RunForOneFrame();
           if(core->GetROM().HasReadError()) {
             rom_read_failed = true;
@@ -513,6 +514,8 @@ static auto LoadEmulator(
             break;
           }
         }
+
+        config->suppress_video_draw = false;
 
         if(max_frames > 0) {
           frames_run++;

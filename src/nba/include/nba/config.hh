@@ -18,6 +18,11 @@ struct Config {
   // matches, the core halts until the next IRQ instead of spinning the loop.
   u32 idle_loop_eliminate_target = 0;
 
+  // When true, the PPU still runs but skips the final video-device blit.  The
+  // Dreamcast frontend sets this on non-final frame-skip iterations so skipped
+  // frames do not pay PVR texture conversion cost.
+  bool suppress_video_draw = false;
+
   enum class BackupType {
     Detect,
     None,

@@ -16,6 +16,29 @@
 
 namespace nba {
 
+namespace {
+
+struct Rgb565Lut {
+  u16 r[256];
+  u16 g[256];
+  u16 b[256];
+
+  Rgb565Lut() {
+    for(int i = 0; i < 256; i++) {
+      r[i] = static_cast<u16>((static_cast<u8>(i) >> 3) << 11);
+      g[i] = static_cast<u16>((static_cast<u8>(i) >> 2) << 5);
+      b[i] = static_cast<u16>(static_cast<u8>(i) >> 3);
+    }
+  }
+};
+
+auto Rgb565Lookup() -> Rgb565Lut const& {
+  static Rgb565Lut const lut;
+  return lut;
+}
+
+} // namespace
+
 DCVideoDevice::DCVideoDevice() = default;
 
 DCVideoDevice::~DCVideoDevice() {
@@ -87,16 +110,17 @@ void DCVideoDevice::ShutdownPvr() {
 }
 
 void DCVideoDevice::ConvertFrameToTexture(u32* buffer) {
+  const auto& lut = Rgb565Lookup();
+
   for(int y = 0; y < kGBAHeight; y++) {
     u16* row = texture_staging_ + y * kTextureStride;
     const u32* src = buffer + y * kGBAWidth;
 
     for(int x = 0; x < kGBAWidth; x++) {
       const u32 pixel = src[x];
-      const u8 b = (pixel >>  0) & 0xFF;
-      const u8 g = (pixel >>  8) & 0xFF;
-      const u8 r = (pixel >> 16) & 0xFF;
-      row[x] = static_cast<u16>(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
+      row[x] = lut.r[(pixel >> 16) & 0xFF] |
+               lut.g[(pixel >>  8) & 0xFF] |
+               lut.b[(pixel >>  0) & 0xFF];
     }
 
     std::memset(row + kGBAWidth, 0, (kTextureStride - kGBAWidth) * sizeof(u16));
@@ -164,6 +188,8 @@ void DCVideoDevice::DrawSoftwareScaled(u32* buffer) {
     return;
   }
 
+  const auto& lut = Rgb565Lookup();
+
   for(int y = 0; y < kGBAHeight; y++) {
     for(int sy = 0; sy < kScale; sy++) {
       const int screen_y = kOffsetY + y * kScale + sy;
@@ -171,11 +197,9 @@ void DCVideoDevice::DrawSoftwareScaled(u32* buffer) {
 
       for(int x = 0; x < kGBAWidth; x++) {
         const u32 pixel = buffer[y * kGBAWidth + x];
-        const u8 b = (pixel >>  0) & 0xFF;
-        const u8 g = (pixel >>  8) & 0xFF;
-        const u8 r = (pixel >> 16) & 0xFF;
-
-        const u16 rgb565 = static_cast<u16>(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
+        const u16 rgb565 = lut.r[(pixel >> 16) & 0xFF] |
+                           lut.g[(pixel >>  8) & 0xFF] |
+                           lut.b[(pixel >>  0) & 0xFF];
 
         for(int sx = 0; sx < kScale; sx++) {
           dst[x * kScale + sx] = rgb565;
@@ -255,13 +279,14 @@ void DCVideoDevice::DrawSoftwareScaledSDL(u32* buffer) {
     return;
   }
 
+  const auto& lut = Rgb565Lookup();
+
   for(int y = 0; y < kGBAHeight; y++) {
     for(int x = 0; x < kGBAWidth; x++) {
       const u32 pixel = buffer[y * kGBAWidth + x];
-      const u8 b = (pixel >>  0) & 0xFF;
-      const u8 g = (pixel >>  8) & 0xFF;
-      const u8 r = (pixel >> 16) & 0xFF;
-      const u16 rgb565 = static_cast<u16>(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
+      const u16 rgb565 = lut.r[(pixel >> 16) & 0xFF] |
+                         lut.g[(pixel >>  8) & 0xFF] |
+                         lut.b[(pixel >>  0) & 0xFF];
 
       for(int sy = 0; sy < kScale; sy++) {
         for(int sx = 0; sx < kScale; sx++) {

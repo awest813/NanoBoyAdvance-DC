@@ -173,7 +173,9 @@ void PPU::BeginHDrawVBlank() {
     scheduler.Add(1007, Scheduler::EventClass::PPU_hblank_vdraw);
     vcount = 0;
 
-    config->video_dev->Draw(output[frame]);
+    if(!config->suppress_video_draw) {
+      config->video_dev->Draw(output[frame]);
+    }
     frame ^= 1;
 
     InitBackground();

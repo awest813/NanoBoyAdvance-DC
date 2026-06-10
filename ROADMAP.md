@@ -109,6 +109,10 @@ without full-ROM allocations or undefined behavior after media failures.
 - [x] Stream `.zip` ROM loading without full-archive RAM buffering (miniz).
 - [x] Apply gpSP `game_config.txt` idle-loop elimination on Dreamcast.
 - [x] Add paged-ROM read-ahead after cache misses.
+- [x] Make frame skip suppress PVR texture conversion on non-presented frames.
+- [x] Tune paged-ROM cache hot path (last-page hint, sequential fread, safer prefetch).
+- [x] Use RGB565 lookup tables for gameplay frame conversion.
+- [x] Enable Auto frame skip by default on the Speed profile.
 - [ ] Lock the benchmark ROM set in `COMPATIBILITY.md`.
 - [ ] Capture baseline FPS per profile on retail hardware.
 - [ ] Tune CPU/audio/video/cache hot paths against recorded baselines.

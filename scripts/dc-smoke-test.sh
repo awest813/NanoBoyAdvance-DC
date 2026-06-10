@@ -85,4 +85,14 @@ run_case "CD paged ROM" /cd/test.gba 60
 run_case "CD ISO9660 suffix" /cd/TEST.GBA 30
 run_case "CD large ROM" /cd/kirby.gba
 
+# Frame-skip path: Speed profile uses auto frame skip; verify it still boots.
+cat >"$FIXTURES/pc/nba-dc.toml" <<'EOF'
+[dreamcast]
+performance_profile = "Speed"
+auto_frame_skip = true
+show_fps = true
+EOF
+
+run_case "Speed profile + auto frame skip" /pc/roms/test.gba 180
+
 echo "All Dreamcast smoke tests passed."

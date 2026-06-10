@@ -53,12 +53,13 @@ void DreamcastConfig::ApplyPerformanceProfile(PerformanceProfile profile) {
       break;
 
     case PerformanceProfile::Speed:
-      // HLE audio skips the GBA sound CPU; one frame of skip and a deeper
-      // buffer reclaim headroom on the most demanding titles.
+      // HLE audio skips the GBA sound CPU; auto frame skip scales under load
+      // and a deeper buffer absorbs the remaining CPU spikes.
       audio.mp2k_hle_enable = true;
       audio.interpolation = Config::Audio::Interpolation::Cosine;
       video.lcd_ghosting = false;
-      frame_skip = 1;
+      frame_skip = 0;
+      auto_frame_skip = true;
       audio_buffer_size = 8192;
       break;
   }
