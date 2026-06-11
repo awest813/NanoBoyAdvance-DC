@@ -4,6 +4,7 @@
 #pragma once
 
 #include <nba/common/compiler.hh>
+#include <nba/common/crc32.hh>
 #include <nba/common/punning.hh>
 #include <nba/rom/backup/eeprom.hh>
 #include <nba/rom/gpio/gpio.hh>
@@ -229,6 +230,42 @@ struct ROM {
     const u32 count = rom_page_miss_count;
     rom_page_miss_count = 0;
     return count;
+  }
+
+  // Scan ROM pages already resident in the LRU cache (e.g. after PreloadFirstPage).
+  // Returns the ROM offset of a matching SoundMain() routine, or 0xFFFFFFFF.
+  auto FindSoundMainOffsetInResidentPages() -> u32 {
+    static constexpr u32 kSoundMainCRC32 = 0x27EA7FCF;
+    static constexpr int kSoundMainLength = 48;
+    static constexpr size_t kPointerReadEnd = 0x74 + sizeof(u32);
+    static constexpr size_t kStep = 4;
+
+    for(auto& page : rom_pages) {
+      if(!page.valid) {
+        continue;
+      }
+
+      if(page.start >= rom_size) {
+        continue;
+      }
+
+      const size_t page_bytes = std::min(kPageSize, rom_size - page.start);
+      if(page_bytes < static_cast<size_t>(kSoundMainLength)) {
+        continue;
+      }
+
+      const size_t safe_limit = page_bytes >= kPointerReadEnd
+        ? page_bytes - kPointerReadEnd
+        : 0;
+
+      for(size_t index = 0; index <= safe_limit; index += kStep) {
+        if(crc32(page.data.data() + index, kSoundMainLength) == kSoundMainCRC32) {
+          return page.start + static_cast<u32>(index);
+        }
+      }
+    }
+
+    return 0xFFFFFFFF;
   }
 
   // Returns a host pointer when the entire range is resident in a single page

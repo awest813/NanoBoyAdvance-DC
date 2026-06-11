@@ -349,6 +349,11 @@ A suggested benchmark set spans the GBA workload range: a light 2D title, a
 sprite-heavy action title, a Mode-7 / pseudo-3D title, and an audio-heavy title.
 Record actual ROMs used in `COMPATIBILITY.md` so results stay reproducible.
 
+On the host port, `scripts/dc-host-benchmark.sh` runs the CI fixture ROMs
+(`test.gba`, `kirby.gba`) across Accuracy / Balanced / Speed and prints FPS and
+ROM page-miss samples for regression tracking before you record retail hardware
+numbers.
+
 ### Compatibility Tiers
 
 Per-game results are tracked in [`COMPATIBILITY.md`](COMPATIBILITY.md) using

@@ -219,7 +219,7 @@ void PPU::BeginSpriteDrawing() {
   if(vcount == 227U || vcount < 160U) {
     std::swap(sprite.buffer_rd, sprite.buffer_wr);
 
-    if(vcount != 159U) {
+    if(vcount != 159U && !config->suppress_video_draw) {
       InitSprite();
     }
   }
