@@ -147,11 +147,11 @@ performance planning, completed work inventory, and phased roadmap).
 - [ ] **Phase A** — Retail benchmark baselines on hardware
       (`PPU` / `CONV` / `PVR` / `PRESENT`)
 - [x] **Phase B** — RGB565 PPU merge output; skip RGBA8888 + conversion on DC
-- [x] **Phase C (partial)** — Bitmap + text merge fast paths (modes 0–5, opaque OBJ)
-- [ ] **Phase C** — Background scanline batching, semi-transparent sprite blend, SH4 tuning
+- [x] **Phase C (partial)** — BG scanline batching, merge fast paths (modes 0–5, opaque OBJ)
+- [ ] **Phase C** — Semi-transparent sprite blend fast path, SH4 tuning
 - [x] **Phase D (partial)** — Direct PVR texture write for RGB565; conditional `pvr_wait_ready`
 - [ ] **Phase D** — Twiddle eval, double-buffered texture upload
-- [x] **Phase E (partial)** — EF-aware auto frame skip (reduce skip when EF > 62)
+- [x] **Phase E (partial)** — EF-aware auto skip + segment-timer headroom hint
 - [ ] **Phase E** — Catch-up model decoupled from skip-draw
 - [ ] **Phase F** — Research (partial PVR compositing, TA strips) — optional
 

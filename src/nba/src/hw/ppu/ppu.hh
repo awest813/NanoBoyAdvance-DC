@@ -292,6 +292,15 @@ private:
   void InitBackground();
   void DrawBackground();
   template<int mode> void DrawBackgroundImpl(int cycles);
+  auto CanUseFastTextBackground(int mode) const -> bool;
+  auto CanUseFastBitmapBackground(int mode) const -> bool;
+  auto TryFastBackgroundScanline(int mode, int cycles) -> bool;
+  void FastRenderMode0BGScanline(int id);
+  void FastRenderMode2BGScanline(int id);
+  void FastRenderMode3BGScanline();
+  void FastRenderMode4BGScanline();
+  void FastRenderMode5BGScanline();
+  void FinishBackgroundScanline(int mode, int cycles);
 
   struct Sprite {
     u64 timestamp_init = 0;

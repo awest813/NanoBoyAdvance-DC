@@ -106,7 +106,8 @@ static auto UpdateAutoFrameSkip(
   DreamcastConfig& config,
   float measured_fps,
   int current_frame_skip,
-  int& recovery_ticks
+  int& recovery_ticks,
+  double emu_ms_per_display_frame = 0.0
 ) -> int {
   if(!config.auto_frame_skip || measured_fps <= 0.0f) {
     recovery_ticks = 0;
@@ -124,6 +125,14 @@ static auto UpdateAutoFrameSkip(
 
   int next_frame_skip = current_frame_skip;
   if(emulated_fps > 62 && current_frame_skip > 0) {
+    next_frame_skip--;
+    recovery_ticks = 0;
+  } else if(
+    speed_profile &&
+    emu_ms_per_display_frame > 0.0 &&
+    emu_ms_per_display_frame < 14.5 &&
+    current_frame_skip > 0
+  ) {
     next_frame_skip--;
     recovery_ticks = 0;
   } else if(measured_fps < raise_threshold && current_frame_skip < 3) {
@@ -571,12 +580,14 @@ static auto LoadEmulator(
         if(elapsed_ms >= 1000) {
           measured_fps = fps_frame_count * 1000.0f / static_cast<float>(elapsed_ms);
           measured_page_misses = core->GetROM().TakePageMissCount();
+          const double emu_ms_per_display = DCFrameTiming::Instance().EmuMsPerDisplayFrame();
           DCFrameTiming::Instance().OnSecondTick();
           active_frame_skip = UpdateAutoFrameSkip(
             *config,
             measured_fps,
             active_frame_skip,
-            auto_frame_skip_recovery_ticks
+            auto_frame_skip_recovery_ticks,
+            emu_ms_per_display
           );
           fps_frame_count = 0;
           fps_last_update = now;
@@ -598,12 +609,14 @@ static auto LoadEmulator(
     }, [&](float fps) {
       measured_fps = fps;
       measured_page_misses = core->GetROM().TakePageMissCount();
+      const double emu_ms_per_display = DCFrameTiming::Instance().EmuMsPerDisplayFrame();
       DCFrameTiming::Instance().OnSecondTick();
       active_frame_skip = UpdateAutoFrameSkip(
         *config,
         measured_fps,
         active_frame_skip,
-        auto_frame_skip_recovery_ticks
+        auto_frame_skip_recovery_ticks,
+        emu_ms_per_display
       );
       const int emulated_fps = static_cast<int>(
         measured_fps * static_cast<float>(active_frame_skip + 1) + 0.5f

@@ -66,6 +66,14 @@ public:
     presented_frames_ += count;
   }
 
+  auto EmuMsPerDisplayFrame() const -> double {
+    if(presented_frames_ == 0) {
+      return 0.0;
+    }
+
+    return static_cast<double>(emu_us_) / 1000.0 / static_cast<double>(presented_frames_);
+  }
+
   void OnSecondTick() {
     if(!enabled_) {
       return;
