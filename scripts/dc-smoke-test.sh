@@ -105,4 +105,20 @@ EOF
 
 run_case "Speed profile + manual frame skip 2" /pc/roms/test.gba 240
 
+echo "=== Smoke: Runtime EF log line (Speed + frame skip) ==="
+log="$(mktemp)"
+NBA_DC_AUTOBOOT_ROM=/pc/roms/test.gba NBA_DC_MAX_FRAMES=180 "$BIN" >"$log" 2>&1 || {
+  cat "$log"
+  rm -f "$log"
+  exit 1
+}
+grep -q '\[NBA-DC\] Runtime: FPS .* EF [0-9]' "$log" || {
+  cat "$log"
+  rm -f "$log"
+  echo "Smoke test missing Runtime EF log line" >&2
+  exit 1
+}
+rm -f "$log"
+echo "OK: Runtime EF log line"
+
 echo "All Dreamcast smoke tests passed."

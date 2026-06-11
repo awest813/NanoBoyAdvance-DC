@@ -48,6 +48,8 @@ if [[ ! -e /cd || -L /cd ]]; then
   sudo ln -sfn "$FIXTURES/cd" /cd
 fi
 
+SUMMARY_LINES=()
+
 run_profile() {
   local profile="$1"
   local rom="$2"
@@ -79,6 +81,9 @@ EOF
   fi
 
   echo "$fps_lines"
+  local last_fps
+  last_fps="$(echo "$fps_lines" | tail -1)"
+  SUMMARY_LINES+=("$label | $profile | $rom | $last_fps")
   rm -f "$log"
   echo
 }
@@ -94,3 +99,8 @@ run_profile "Balanced" /cd/kirby.gba     "large paged ROM (16 MiB)"
 run_profile "Speed"    /cd/kirby.gba     "large paged ROM (16 MiB)"
 
 echo "Host benchmark complete."
+echo
+echo "=== Summary (last steady-state sample per case) ==="
+for line in "${SUMMARY_LINES[@]}"; do
+  echo "$line"
+done

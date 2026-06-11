@@ -44,8 +44,13 @@ These numbers are for regression tracking on the host port, not retail SH4 FPS.
 
 | ROM | Scene | Accuracy | Balanced | Speed | Recommended profile |
 |-----|-------|----------|----------|-------|---------------------|
-| `test.gba` | Idle loop | _record_ | _record_ | _record_ | _TBD_ |
-| `kirby.gba` | Idle loop (16 MiB) | – | _record_ | _record_ | _TBD_ |
+| `test.gba` | Idle loop | ~59.8 | ~59.8 | ~59.8 | Balanced (host CI) |
+| `kirby.gba` | Idle loop (16 MiB) | – | ~59.8 | ~59.8 | Balanced (host CI) |
+
+Host CI numbers come from `scripts/dc-host-benchmark.sh` (gcc-12, Ubuntu, 240-frame
+window). They track regressions in the desktop smoke port, not retail Dreamcast FPS.
+The synthetic idle-loop ROMs do not stress PPU/audio; retail baselines will be lower
+on heavy scenes.
 
 ### Retail Dreamcast hardware
 

@@ -509,19 +509,14 @@ static auto LoadEmulator(
       }
 
       if(running) {
-        cheats.Apply(*core);
+        core->RunForDisplayFrame(*config, active_frame_skip, [&]() {
+          cheats.Apply(*core);
+        });
 
-        for(int skip = 0; skip <= active_frame_skip; skip++) {
-          config->suppress_video_draw = skip < active_frame_skip;
-          core->RunForOneFrame();
-          if(core->GetROM().HasReadError()) {
-            rom_read_failed = true;
-            running = false;
-            break;
-          }
+        if(core->GetROM().HasReadError()) {
+          rom_read_failed = true;
+          running = false;
         }
-
-        config->suppress_video_draw = false;
 
         if(max_frames > 0) {
           frames_run++;
@@ -565,9 +560,15 @@ static auto LoadEmulator(
           );
           fps_frame_count = 0;
           fps_last_update = now;
+          const int emulated_fps = static_cast<int>(
+            measured_fps * static_cast<float>(active_frame_skip + 1) + 0.5f
+          );
           std::printf(
-            "[NBA-DC] Runtime: FPS %.1f, ROM page misses %lu\n",
+            "[NBA-DC] Runtime: FPS %.1f EF %d FS %s%d PG %lu\n",
             static_cast<double>(measured_fps),
+            emulated_fps,
+            config->auto_frame_skip ? "A" : "",
+            active_frame_skip,
             static_cast<unsigned long>(measured_page_misses)
           );
           std::fflush(stdout);
@@ -583,9 +584,15 @@ static auto LoadEmulator(
         active_frame_skip,
         auto_frame_skip_recovery_ticks
       );
+      const int emulated_fps = static_cast<int>(
+        measured_fps * static_cast<float>(active_frame_skip + 1) + 0.5f
+      );
       std::printf(
-        "[NBA-DC] Runtime: FPS %.1f, ROM page misses %lu\n",
+        "[NBA-DC] Runtime: FPS %.1f EF %d FS %s%d PG %lu\n",
         static_cast<double>(measured_fps),
+        emulated_fps,
+        config->auto_frame_skip ? "A" : "",
+        active_frame_skip,
         static_cast<unsigned long>(measured_page_misses)
       );
       std::fflush(stdout);

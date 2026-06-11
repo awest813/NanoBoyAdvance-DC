@@ -352,9 +352,10 @@ sprite-heavy action title, a Mode-7 / pseudo-3D title, and an audio-heavy title.
 Record actual ROMs used in `COMPATIBILITY.md` so results stay reproducible.
 
 On the host port, `scripts/dc-host-benchmark.sh` runs the CI fixture ROMs
-(`test.gba`, `kirby.gba`) across Accuracy / Balanced / Speed and prints FPS and
-ROM page-miss samples for regression tracking before you record retail hardware
-numbers.
+(`test.gba`, `kirby.gba`) across Accuracy / Balanced / Speed and prints FPS,
+`EF` (estimated emulated FPS), frame-skip state, and ROM page-miss samples for
+regression tracking before you record retail hardware numbers. Steady-state host
+CI results are recorded in `COMPATIBILITY.md`.
 
 ### Compatibility Tiers
 

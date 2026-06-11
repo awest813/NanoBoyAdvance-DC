@@ -127,6 +127,7 @@ without full-ROM allocations or undefined behavior after media failures.
 - [x] Speed profile skips BIOS splash and disables MP2K cubic filtering.
 - [x] Lock the benchmark ROM set in `COMPATIBILITY.md` (host CI fixtures +
   retail placeholders).
+- [x] Capture host CI baseline FPS per profile (`COMPATIBILITY.md`, benchmark script).
 - [ ] Capture baseline FPS per profile on retail hardware.
 - [x] Tune CPU/audio/video/cache hot paths against recorded baselines (CRC32
   table for MP2K scan, skip LLE SoundMainRAM under HLE, Speed reverb off,
