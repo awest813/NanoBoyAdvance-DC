@@ -106,7 +106,9 @@ void PPU::BeginHDrawVDraw() {
 
   if(!config->suppress_video_draw) {
     DrawBackground();
-    DrawWindow();
+    if(HasActiveWindows()) {
+      DrawWindow();
+    }
     DrawMerge();
   }
 
@@ -135,7 +137,7 @@ void PPU::BeginHDrawVDraw() {
     scheduler.Add(1007, Scheduler::EventClass::PPU_hblank_vdraw);
   }
 
-  if(!config->suppress_video_draw) {
+  if(!config->suppress_video_draw && HasActiveWindows()) {
     InitWindow();
   }
 }
@@ -156,7 +158,7 @@ void PPU::BeginHDrawVBlank() {
   auto& vcount = mmio.vcount;
   auto& dispstat = mmio.dispstat;
 
-  if(!config->suppress_video_draw) {
+  if(!config->suppress_video_draw && HasActiveWindows()) {
     DrawWindow();
   }
 
@@ -207,7 +209,7 @@ void PPU::BeginHDrawVBlank() {
 
   UpdateVideoTransferDMA();
 
-  if(!config->suppress_video_draw) {
+  if(!config->suppress_video_draw && HasActiveWindows()) {
     InitWindow();
   }
 }

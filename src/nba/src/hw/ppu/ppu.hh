@@ -394,8 +394,12 @@ private:
   void InitMerge();
   void DrawMerge();
   void DrawMergeImpl(int cycles);
+  auto CanUseFastSimpleMerge() const -> bool;
   auto CanUseFastBitmapMerge() const -> bool;
+  auto CanUseFastTextMerge(bool& enable_obj) const -> bool;
   void FastMergeBitmapScanlineImpl(int cycles);
+  void FastMergeTextScanlineImpl(int cycles, bool enable_obj);
+  void WriteMergedPixel(int out_index, u16 color);
 
   static auto Blend(u16 color_a, u16 color_b, int eva, int evb) -> u16;
   static auto Brighten(u16 color, int evy) -> u16;
@@ -403,6 +407,13 @@ private:
 
   bool ALWAYS_INLINE ForcedBlank() const {
     return (mmio.dispcnt_latch[0] | mmio.dispcnt.hword) & 0x80U;
+  }
+
+  bool ALWAYS_INLINE HasActiveWindows() const {
+    const u16 dispcnt = mmio.dispcnt_latch[0] & mmio.dispcnt.hword;
+    return mmio.dispcnt.enable[ENABLE_WIN0] ||
+           mmio.dispcnt.enable[ENABLE_WIN1] ||
+           (mmio.dispcnt.enable[ENABLE_OBJWIN] && (dispcnt & (256U << LAYER_OBJ)));
   }
 
   auto ALWAYS_INLINE FetchPRAM(uint cycle, uint address) -> u16 {

@@ -70,13 +70,8 @@ void PPU::DrawMerge() {
 #endif
 }
 
-auto PPU::CanUseFastBitmapMerge() const -> bool {
+auto PPU::CanUseFastSimpleMerge() const -> bool {
   if(!config->ppu_fast_mode) {
-    return false;
-  }
-
-  const int mode = mmio.dispcnt.mode;
-  if(mode < 3 || mode > 5) {
     return false;
   }
 
@@ -98,25 +93,11 @@ auto PPU::CanUseFastBitmapMerge() const -> bool {
     }
   }
 
-  const u16 latched_dispcnt_and_current_dispcnt = mmio.dispcnt_latch[0] & mmio.dispcnt.hword;
-
-  if(latched_dispcnt_and_current_dispcnt & (256U << LAYER_OBJ)) {
-    return false;
-  }
-
   if(mmio.dispcnt.enable[ENABLE_WIN0] || mmio.dispcnt.enable[ENABLE_WIN1]) {
     return false;
   }
 
   if(mmio.dispcnt.enable[ENABLE_OBJWIN]) {
-    return false;
-  }
-
-  if(!(latched_dispcnt_and_current_dispcnt & (256U << 2))) {
-    return false;
-  }
-
-  if(mmio.bgcnt[2].mosaic_enable) {
     return false;
   }
 
@@ -131,9 +112,75 @@ auto PPU::CanUseFastBitmapMerge() const -> bool {
   return true;
 }
 
+auto PPU::CanUseFastBitmapMerge() const -> bool {
+  if(!CanUseFastSimpleMerge()) {
+    return false;
+  }
+
+  const int mode = mmio.dispcnt.mode;
+  if(mode < 3 || mode > 5) {
+    return false;
+  }
+
+  const u16 latched_dispcnt_and_current_dispcnt = mmio.dispcnt_latch[0] & mmio.dispcnt.hword;
+
+  if(latched_dispcnt_and_current_dispcnt & (256U << LAYER_OBJ)) {
+    return false;
+  }
+
+  if(!(latched_dispcnt_and_current_dispcnt & (256U << 2))) {
+    return false;
+  }
+
+  if(mmio.bgcnt[2].mosaic_enable) {
+    return false;
+  }
+
+  return true;
+}
+
+auto PPU::CanUseFastTextMerge(bool& enable_obj) const -> bool {
+  if(!CanUseFastSimpleMerge()) {
+    return false;
+  }
+
+  const int mode = mmio.dispcnt.mode;
+  if(mode > 1) {
+    return false;
+  }
+
+  static constexpr int k_min_max_bg[2][2] {
+    {0, 3},
+    {0, 2},
+  };
+
+  const int min_bg = k_min_max_bg[mode][0];
+  const int max_bg = k_min_max_bg[mode][1];
+  const u16 latched_dispcnt_and_current_dispcnt = mmio.dispcnt_latch[0] & mmio.dispcnt.hword;
+
+  enable_obj = (latched_dispcnt_and_current_dispcnt & (256U << LAYER_OBJ)) != 0;
+
+  for(int id = min_bg; id <= max_bg; id++) {
+    if((latched_dispcnt_and_current_dispcnt & (256U << id)) && mmio.bgcnt[id].mosaic_enable) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+void PPU::WriteMergedPixel(int out_index, u16 color) {
+#if defined(PLATFORM_DREAMCAST)
+  if(config->video_rgb565_output) {
+    output565[frame][out_index] = RGB555ToRGB565(color);
+    return;
+  }
+#endif
+  output[frame][out_index] = RGB555(color);
+}
+
 void PPU::FastMergeBitmapScanlineImpl(int cycles) {
-  const int y = mmio.vcount;
-  const int out_row = y * 240;
+  const int out_row = mmio.vcount * 240;
   const u16 backdrop = read<u16>(pram, 0);
 
   for(int x = 0; x < 240; x++) {
@@ -148,14 +195,66 @@ void PPU::FastMergeBitmapScanlineImpl(int cycles) {
       color = read<u16>(pram, (bg_color & 0xFFU) << 1);
     }
 
-#if defined(PLATFORM_DREAMCAST)
-    if(config->video_rgb565_output) {
-      output565[frame][out_row + x] = RGB555ToRGB565(color);
-    } else
-#endif
-    {
-      output[frame][out_row + x] = RGB555(color);
+    WriteMergedPixel(out_row + x, color);
+  }
+
+  merge.cycle = std::min(1006U, merge.cycle + static_cast<uint>(cycles));
+  merge.mosaic_x[0] = 0U;
+  merge.mosaic_x[1] = 0U;
+}
+
+void PPU::FastMergeTextScanlineImpl(int cycles, bool enable_obj) {
+  static constexpr int k_min_max_bg[2][2] {
+    {0, 3},
+    {0, 2},
+  };
+
+  const int mode = mmio.dispcnt.mode;
+  const int min_bg = k_min_max_bg[mode][0];
+  const int max_bg = k_min_max_bg[mode][1];
+  const u16 latched_dispcnt_and_current_dispcnt = mmio.dispcnt_latch[0] & mmio.dispcnt.hword;
+
+  int bg_list[4];
+  int bg_count = 0;
+
+  for(int priority = 0; priority <= 3; priority++) {
+    for(int id = min_bg; id <= max_bg; id++) {
+      if(
+        mmio.bgcnt[id].priority == priority &&
+        (latched_dispcnt_and_current_dispcnt & (256U << id))
+      ) {
+        bg_list[bg_count++] = id;
+      }
     }
+  }
+
+  const u16 backdrop = read<u16>(pram, 0);
+  const int out_row = mmio.vcount * 240;
+
+  for(int x = 0; x < 240; x++) {
+    u16 color = backdrop;
+    int top_bg_priority = 4;
+
+    for(int index = 0; index < bg_count; index++) {
+      const int bg_id = bg_list[index];
+      const u32 bg_color = bg.buffer[x][bg_id];
+
+      if(bg_color != 0U) {
+        color = read<u16>(pram, bg_color << 1);
+        top_bg_priority = mmio.bgcnt[bg_id].priority;
+        break;
+      }
+    }
+
+    if(enable_obj) {
+      const auto& pixel = sprite.buffer_rd[x];
+
+      if(pixel.color != 0U && static_cast<int>(pixel.priority) <= top_bg_priority) {
+        color = read<u16>(pram, pixel.color << 1);
+      }
+    }
+
+    WriteMergedPixel(out_row + x, color);
   }
 
   merge.cycle = std::min(1006U, merge.cycle + static_cast<uint>(cycles));
@@ -164,9 +263,31 @@ void PPU::FastMergeBitmapScanlineImpl(int cycles) {
 }
 
 void PPU::DrawMergeImpl(int cycles) {
-  if(CanUseFastBitmapMerge() && merge.cycle == 0U && cycles >= 960) {
-    FastMergeBitmapScanlineImpl(cycles);
-    return;
+  if(merge.cycle == 0U && cycles >= 960) {
+    bool enable_obj = false;
+    if(CanUseFastTextMerge(enable_obj)) {
+      bool use_slow_merge = false;
+
+      if(enable_obj) {
+        for(int x = 0; x < 240; x++) {
+          const auto& pixel = sprite.buffer_rd[x];
+          if(pixel.color != 0U && pixel.alpha) {
+            use_slow_merge = true;
+            break;
+          }
+        }
+      }
+
+      if(!use_slow_merge) {
+        FastMergeTextScanlineImpl(cycles, enable_obj);
+        return;
+      }
+    }
+
+    if(CanUseFastBitmapMerge()) {
+      FastMergeBitmapScanlineImpl(cycles);
+      return;
+    }
   }
 
   static constexpr int k_min_max_bg[8][2] {
