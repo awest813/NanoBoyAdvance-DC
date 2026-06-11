@@ -57,6 +57,7 @@ void DreamcastConfig::ApplyPerformanceProfile(PerformanceProfile profile) {
       // and a deeper buffer absorbs the remaining CPU spikes.
       audio.mp2k_hle_enable = true;
       audio.mp2k_hle_cubic = false;
+      audio.mp2k_hle_force_reverb = false;
       audio.interpolation = Config::Audio::Interpolation::Cosine;
       video.lcd_ghosting = false;
       skip_bios = true;

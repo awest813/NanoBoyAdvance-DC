@@ -50,6 +50,20 @@ struct ARM7TDMI {
     return pipe.opcode[slot];
   }
 
+  // Emulate BX LR after an HLE hook replaces a Thumb/ARM subroutine body.
+  void ReturnFromSubroutine() {
+    const u32 link = state.r14;
+
+    if(link & 1) {
+      state.r15 = link & ~1u;
+      ReloadPipeline16();
+    } else {
+      state.cpsr.f.thumb = 0;
+      state.r15 = link;
+      ReloadPipeline32();
+    }
+  }
+
   void Run() {
     if(IRQLine()) SignalIRQ();
 

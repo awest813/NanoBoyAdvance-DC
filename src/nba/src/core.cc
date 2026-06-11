@@ -104,6 +104,10 @@ void Core::Run(int cycles) {
             apu.GetMP2K().SoundMainRAM(*sound_info);
           }
         }
+
+        // The HLE mixer replaces SoundMainRAM(); skip the ROM routine body.
+        cpu.ReturnFromSubroutine();
+        continue;
       }
 
       cpu.Run();

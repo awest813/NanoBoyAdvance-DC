@@ -300,14 +300,19 @@ knobs. Pick the highest-fidelity profile a given game can sustain at full speed.
 | **Balanced** | Native (LLE)   | Cosine        | 0          | 4096         | Off          |
 | **Speed**    | MP2K HLE       | Cosine        | Auto (0–3) | 8192         | Off          |
 
+Speed-profile MP2K HLE uses linear resampling (no cubic filter), skips the ROM
+`SoundMainRAM()` routine body after the host mixer runs, and leaves reverb at
+each game's native strength instead of forcing a minimum level.
+
 - **Accuracy** – closest to real GBA behavior; best for light 2D titles that
   already hold full speed and benefit from accurate audio.
 - **Balanced** (default) – native audio with cheap interpolation and no frame
   skipping. Good fidelity with CPU headroom on most games.
-- **Speed** – HLE audio bypasses the GBA sound CPU, BIOS splash is skipped, and
-  **Auto frame skip** scales skipped emulated frames under load (skipped frames
-  skip PPU rasterization and PVR texture conversion). Best for the heaviest
-  titles (3D/Mode-7-heavy games).
+- **Speed** – HLE audio bypasses the GBA sound CPU (the ROM `SoundMainRAM()`
+  body is not executed once the mixer hook is detected), BIOS splash is skipped,
+  and **Auto frame skip** scales skipped emulated frames under load (skipped
+  frames skip PPU rasterization and PVR texture conversion). Best for the
+  heaviest titles (3D/Mode-7-heavy games).
 
 Switching profiles overwrites Frame skip, disables Auto frame skip, and rewrites
 Audio buffer; adjust those rows afterward to fine-tune within a profile.

@@ -125,7 +125,10 @@ without full-ROM allocations or undefined behavior after media failures.
 - [x] Speed profile skips BIOS splash and disables MP2K cubic filtering.
 - [ ] Lock the benchmark ROM set in `COMPATIBILITY.md`.
 - [ ] Capture baseline FPS per profile on retail hardware.
-- [ ] Tune CPU/audio/video/cache hot paths against recorded baselines.
+- [x] Tune CPU/audio/video/cache hot paths against recorded baselines (CRC32
+  table for MP2K scan, skip LLE SoundMainRAM under HLE, Speed reverb off,
+  audio underrun fast path).
+- [ ] Re-measure benchmark ROMs on retail hardware after the tuning pass.
 - [ ] Fill compatibility tiers, recommended profiles, and known regressions.
 
 ## Milestone 4: Release Packaging + Contributor Workflow
