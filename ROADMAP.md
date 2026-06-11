@@ -135,6 +135,22 @@ without full-ROM allocations or undefined behavior after media failures.
 - [ ] Re-measure benchmark ROMs on retail hardware after the tuning pass.
 - [ ] Fill compatibility tiers, recommended profiles, and known regressions.
 
+## Milestone 5: PPU / GPU Overhaul (Max Performance)
+
+**Goal:** hold ~59.7 display FPS on retail Dreamcast for heavy GBA scenes by
+overhauling the software PPU output path and the PVR presentation pipeline.
+
+**Master plan:** [`PPU_GPU_OVERHAUL.md`](PPU_GPU_OVERHAUL.md) (combines all PPU/GPU
+performance planning, completed work inventory, and phased roadmap).
+
+- [ ] **Phase A** — Retail benchmark baselines + per-frame GPU segment timers
+      (`PPU` / `CONV` / `PVR` / `PRESENT`)
+- [ ] **Phase B** — RGB565 PPU merge output; skip RGBA8888 + conversion on DC
+- [ ] **Phase C** — Speed-profile PPU fast raster (bitmap modes, scanline batching, SH4 tuning)
+- [ ] **Phase D** — PVR upload/present optimization (direct texture write, scene amortization)
+- [ ] **Phase E** — Frame pipeline policy v2 (`EF`-aware auto skip, catch-up model)
+- [ ] **Phase F** — Research (partial PVR compositing, TA strips) — optional
+
 ## Milestone 4: Release Packaging + Contributor Workflow
 
 **Goal:** make releases and outside contributions repeatable.

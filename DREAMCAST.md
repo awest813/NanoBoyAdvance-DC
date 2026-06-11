@@ -281,6 +281,13 @@ src/platform/dreamcast/
 
 The Dreamcast backend reuses the core emulator library (`nba`) and the platform-core library (loaders, config, frame limiter) while providing its own device implementations.
 
+## PPU / GPU Performance Plan
+
+Detailed phased planning for software PPU and PVR presentation work lives in
+[`PPU_GPU_OVERHAUL.md`](PPU_GPU_OVERHAUL.md). That document inventories completed
+optimizations (PVR scale, frame skip, LUT conversion, etc.) and tracks the next
+phases: RGB565 merge output, fast raster paths, and PVR upload tuning.
+
 ## Performance Notes
 
 The Dreamcast SH4 at 200 MHz is significantly slower than modern desktop CPUs. Expect performance challenges with cycle-accurate GBA emulation. Built-in tuning options:
