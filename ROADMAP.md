@@ -121,6 +121,8 @@ without full-ROM allocations or undefined behavior after media failures.
 - [x] Use RGB565 lookup tables for gameplay frame conversion.
 - [x] Enable Auto frame skip by default on the Speed profile.
 - [x] Skip PPU scanline rasterization on suppressed frame-skip frames.
+- [x] Skip PPU sprite/init work on suppressed frame-skip frames; tune Speed
+  auto frame skip; add emulated-FPS overlay (`EF`).
 - [x] Use fixed-size paged-ROM buffers and preload ROM page 1 at attach.
 - [x] Speed profile skips BIOS splash and disables MP2K cubic filtering.
 - [x] Lock the benchmark ROM set in `COMPATIBILITY.md` (host CI fixtures +

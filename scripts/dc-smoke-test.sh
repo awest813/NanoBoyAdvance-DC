@@ -95,4 +95,14 @@ EOF
 
 run_case "Speed profile + auto frame skip" /pc/roms/test.gba 180
 
+cat >"$FIXTURES/pc/nba-dc.toml" <<'EOF'
+[dreamcast]
+performance_profile = "Speed"
+frame_skip = 2
+auto_frame_skip = false
+show_fps = true
+EOF
+
+run_case "Speed profile + manual frame skip 2" /pc/roms/test.gba 240
+
 echo "All Dreamcast smoke tests passed."

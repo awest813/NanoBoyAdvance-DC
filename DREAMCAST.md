@@ -183,8 +183,9 @@ preset.
 
 When **Frame skip** is set to **Auto**, the runtime raises the active skip value
 when measured FPS drops below the full-speed target and slowly lowers it after
-several stable samples. The FPS overlay shows this as `FSA<n>`; manual mode is
-shown as `FS <n>`.
+several stable samples. On the **Speed** profile, auto frame skip reacts one FPS
+point sooner and recovers after two stable samples instead of three. The FPS
+overlay shows this as `FSA<n>`; manual mode is shown as `FS <n>`.
 
 ### Settings Persistence
 
@@ -325,8 +326,9 @@ configuration known to have the extra memory headroom.
 
 Enable **Show FPS** in settings to overlay the measured display frame rate in
 the top-left corner during play. The reading is averaged once per second by the
-frame limiter. The overlay also shows `FS`/`FSA` for manual/automatic frame skip
-and `PG`, the number of ROM page-cache misses since the previous FPS sample. A
+frame limiter. The overlay also shows `EF` (estimated emulated frames per second,
+display FPS × (frame skip + 1)), `FS`/`FSA` for manual/automatic frame skip, and
+`PG`, the number of ROM page-cache misses since the previous FPS sample. A
 title running at full speed reports ~59.7 FPS (the GBA's native rate);
 sustained readings below that indicate the SH4 cannot keep up at the current
 profile.

@@ -112,13 +112,19 @@ static auto UpdateAutoFrameSkip(
     return config.frame_skip;
   }
 
+  const bool speed_profile =
+    config.performance_profile == DreamcastConfig::PerformanceProfile::Speed;
+  const float raise_threshold = speed_profile ? 56.0f : 55.0f;
+  const float lower_threshold = speed_profile ? 58.5f : 57.5f;
+  const int recovery_required = speed_profile ? 2 : 3;
+
   int next_frame_skip = current_frame_skip;
-  if(measured_fps < 55.0f && current_frame_skip < 3) {
+  if(measured_fps < raise_threshold && current_frame_skip < 3) {
     next_frame_skip++;
     recovery_ticks = 0;
-  } else if(measured_fps > 57.5f && current_frame_skip > 0) {
+  } else if(measured_fps > lower_threshold && current_frame_skip > 0) {
     recovery_ticks++;
-    if(recovery_ticks >= 3) {
+    if(recovery_ticks >= recovery_required) {
       next_frame_skip--;
       recovery_ticks = 0;
     }
@@ -595,12 +601,16 @@ static auto LoadEmulator(
 
     if(config->show_fps) {
       // Fixed width keeps stale digits from lingering as the value changes.
-      char fps_text[48];
+      const int emulated_fps = static_cast<int>(
+        measured_fps * static_cast<float>(active_frame_skip + 1) + 0.5f
+      );
+      char fps_text[56];
       std::snprintf(
         fps_text,
         sizeof(fps_text),
-        "FPS %5.1f FS %s%d PG %3lu",
+        "FPS %5.1f EF %3d FS %s%d PG %3lu",
         static_cast<double>(measured_fps),
+        emulated_fps,
         config->auto_frame_skip ? "A" : "",
         active_frame_skip,
         static_cast<unsigned long>(measured_page_misses)

@@ -8,6 +8,7 @@ on:
       - 'cmake/**'
       - 'thirdparty/miniz/**'
       - 'scripts/dc-smoke-test.sh'
+      - 'scripts/dc-host-benchmark.sh'
       - 'scripts/generate-dc-test-rom.py'
       - '.github/workflows/dreamcast-smoke.yml'
   pull_request:
@@ -16,6 +17,7 @@ on:
       - 'cmake/**'
       - 'thirdparty/miniz/**'
       - 'scripts/dc-smoke-test.sh'
+      - 'scripts/dc-host-benchmark.sh'
       - 'scripts/generate-dc-test-rom.py'
       - '.github/workflows/dreamcast-smoke.yml'
   workflow_dispatch:
@@ -31,3 +33,5 @@ jobs:
           sudo apt-get install -y ninja-build g++-12 gcc-12 python3
       - name: Run Dreamcast host smoke tests
         run: bash scripts/dc-smoke-test.sh
+      - name: Run Dreamcast host benchmark (short)
+        run: NBA_DC_BENCH_FRAMES=240 bash scripts/dc-host-benchmark.sh

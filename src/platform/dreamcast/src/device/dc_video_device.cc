@@ -19,16 +19,23 @@ namespace nba {
 namespace {
 
 struct Rgb565Lut {
-  u16 r[256];
-  u16 g[256];
-  u16 b[256];
+  u16 rgb555[32768];
 
   Rgb565Lut() {
-    for(int i = 0; i < 256; i++) {
-      r[i] = static_cast<u16>((static_cast<u8>(i) >> 3) << 11);
-      g[i] = static_cast<u16>((static_cast<u8>(i) >> 2) << 5);
-      b[i] = static_cast<u16>(static_cast<u8>(i) >> 3);
+    for(int index = 0; index < 32768; index++) {
+      const int r5 = (index >> 10) & 31;
+      const int g6 = (index >> 5) & 63;
+      const int b5 = index & 31;
+      rgb555[index] = static_cast<u16>((r5 << 11) | (g6 << 5) | b5);
     }
+  }
+
+  auto FromRgb888(u32 pixel) const -> u16 {
+    const int index =
+      ((pixel >> 16) & 0xF8) << 7 |
+      ((pixel >>  8) & 0xFC) << 3 |
+      ((pixel >>  3) & 0x1F);
+    return rgb555[index];
   }
 };
 
@@ -117,10 +124,7 @@ void DCVideoDevice::ConvertFrameToTexture(u32* buffer) {
     const u32* src = buffer + y * kGBAWidth;
 
     for(int x = 0; x < kGBAWidth; x++) {
-      const u32 pixel = src[x];
-      row[x] = lut.r[(pixel >> 16) & 0xFF] |
-               lut.g[(pixel >>  8) & 0xFF] |
-               lut.b[(pixel >>  0) & 0xFF];
+      row[x] = lut.FromRgb888(src[x]);
     }
 
     std::memset(row + kGBAWidth, 0, (kTextureStride - kGBAWidth) * sizeof(u16));
@@ -196,10 +200,7 @@ void DCVideoDevice::DrawSoftwareScaled(u32* buffer) {
       u16* dst = vram_base_ + screen_y * kScreenWidth + kOffsetX;
 
       for(int x = 0; x < kGBAWidth; x++) {
-        const u32 pixel = buffer[y * kGBAWidth + x];
-        const u16 rgb565 = lut.r[(pixel >> 16) & 0xFF] |
-                           lut.g[(pixel >>  8) & 0xFF] |
-                           lut.b[(pixel >>  0) & 0xFF];
+        const u16 rgb565 = lut.FromRgb888(buffer[y * kGBAWidth + x]);
 
         for(int sx = 0; sx < kScale; sx++) {
           dst[x * kScale + sx] = rgb565;
@@ -283,10 +284,7 @@ void DCVideoDevice::DrawSoftwareScaledSDL(u32* buffer) {
 
   for(int y = 0; y < kGBAHeight; y++) {
     for(int x = 0; x < kGBAWidth; x++) {
-      const u32 pixel = buffer[y * kGBAWidth + x];
-      const u16 rgb565 = lut.r[(pixel >> 16) & 0xFF] |
-                         lut.g[(pixel >>  8) & 0xFF] |
-                         lut.b[(pixel >>  0) & 0xFF];
+      const u16 rgb565 = lut.FromRgb888(buffer[y * kGBAWidth + x]);
 
       for(int sy = 0; sy < kScale; sy++) {
         for(int sx = 0; sx < kScale; sx++) {

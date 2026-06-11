@@ -127,13 +127,17 @@ void PPU::BeginHDrawVDraw() {
       scheduler.Add(1, Scheduler::EventClass::PPU_vblank_irq);
     }
   } else {
-    InitBackground();
-    InitMerge();
+    if(!config->suppress_video_draw) {
+      InitBackground();
+      InitMerge();
+    }
 
     scheduler.Add(1007, Scheduler::EventClass::PPU_hblank_vdraw);
   }
 
-  InitWindow();
+  if(!config->suppress_video_draw) {
+    InitWindow();
+  }
 }
 
 void PPU::BeginHBlankVDraw() {
@@ -182,8 +186,10 @@ void PPU::BeginHDrawVBlank() {
     }
     frame ^= 1;
 
-    InitBackground();
-    InitMerge();
+    if(!config->suppress_video_draw) {
+      InitBackground();
+      InitMerge();
+    }
   } else {
     scheduler.Add(1007, Scheduler::EventClass::PPU_hblank_vblank);
 
@@ -194,7 +200,9 @@ void PPU::BeginHDrawVBlank() {
 
   UpdateVideoTransferDMA();
 
-  InitWindow();
+  if(!config->suppress_video_draw) {
+    InitWindow();
+  }
 }
 
 void PPU::BeginHBlankVBlank() {
@@ -212,14 +220,19 @@ void PPU::BeginHBlankVBlank() {
 void PPU::BeginSpriteDrawing() {
   const uint vcount = mmio.vcount;
 
-  if(vcount < 160U && !config->suppress_video_draw) {
+  if(config->suppress_video_draw) {
+    scheduler.Add(1232, Scheduler::EventClass::PPU_begin_sprite_fetch);
+    return;
+  }
+
+  if(vcount < 160U) {
     DrawSprite();
   }
 
   if(vcount == 227U || vcount < 160U) {
     std::swap(sprite.buffer_rd, sprite.buffer_wr);
 
-    if(vcount != 159U && !config->suppress_video_draw) {
+    if(vcount != 159U) {
       InitSprite();
     }
   }
