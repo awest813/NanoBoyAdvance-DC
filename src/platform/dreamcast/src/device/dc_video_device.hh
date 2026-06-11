@@ -73,6 +73,7 @@ private:
   u16* vram_base_ = nullptr;
   bool pvr_ready_ = false;
   bool frame_ready_ = false;
+  bool pvr_scene_submitted_ = false;
   pvr_ptr_t texture_vram_ = nullptr;
   alignas(32) u16 texture_staging_[kTextureStride * kGBAHeight]{};
   pvr_poly_hdr_t poly_hdr_{};

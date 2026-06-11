@@ -342,9 +342,12 @@ Suggested checkbox granularity:
 - [x] Phase A (partial) — GPU segment timers (`DCFrameTiming`, env + Show FPS)
 - [ ] Phase A — retail hardware baselines
 - [x] Phase B — RGB565 PPU output + DC draw path
-- [ ] Phase C — Speed-profile PPU fast raster
-- [ ] Phase D — PVR upload/present optimization
-- [ ] Phase E — frame pipeline policy v2
+- [x] Phase C (partial) — bitmap merge fast path (modes 3–5, `ppu_fast_mode`)
+- [ ] Phase C — text scanline batching, sprite fast path
+- [x] Phase D (partial) — direct RGB565 PVR write, conditional scene wait
+- [ ] Phase D — twiddle eval, double-buffer upload
+- [x] Phase E (partial) — EF-aware auto frame skip v2
+- [ ] Phase E — catch-up decoupled from skip-draw
 - [ ] Phase F — research items (optional)
 
 ---

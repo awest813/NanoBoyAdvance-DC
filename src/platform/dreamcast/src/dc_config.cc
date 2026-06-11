@@ -40,6 +40,7 @@ void DreamcastConfig::ApplyPerformanceProfile(PerformanceProfile profile) {
       audio.mp2k_hle_enable = false;
       audio.interpolation = Config::Audio::Interpolation::Sinc_64;
       video.lcd_ghosting = true;
+      ppu_fast_mode = false;
       frame_skip = 0;
       audio_buffer_size = 8192;
       break;
@@ -49,6 +50,7 @@ void DreamcastConfig::ApplyPerformanceProfile(PerformanceProfile profile) {
       audio.mp2k_hle_enable = false;
       audio.interpolation = Config::Audio::Interpolation::Cosine;
       video.lcd_ghosting = false;
+      ppu_fast_mode = false;
       frame_skip = 0;
       audio_buffer_size = 4096;
       break;
@@ -61,6 +63,7 @@ void DreamcastConfig::ApplyPerformanceProfile(PerformanceProfile profile) {
       audio.mp2k_hle_force_reverb = false;
       audio.interpolation = Config::Audio::Interpolation::Cosine;
       video.lcd_ghosting = false;
+      ppu_fast_mode = true;
       skip_bios = true;
       frame_skip = 0;
       auto_frame_skip = true;

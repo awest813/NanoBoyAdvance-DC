@@ -28,6 +28,9 @@ struct Config {
   // VideoDevice::DrawRgb565 instead of expanding to RGBA8888 first.
   bool video_rgb565_output = false;
 
+  // When true, the PPU may skip cycle-accurate merge on simple bitmap modes.
+  bool ppu_fast_mode = false;
+
 #if defined(PLATFORM_DREAMCAST)
   using DcPpuTimingCallback = void (*)(long long microseconds);
   DcPpuTimingCallback dc_ppu_timing_callback = nullptr;

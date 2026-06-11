@@ -70,7 +70,105 @@ void PPU::DrawMerge() {
 #endif
 }
 
+auto PPU::CanUseFastBitmapMerge() const -> bool {
+  if(!config->ppu_fast_mode) {
+    return false;
+  }
+
+  const int mode = mmio.dispcnt.mode;
+  if(mode < 3 || mode > 5) {
+    return false;
+  }
+
+  if(ForcedBlank()) {
+    return false;
+  }
+
+  if(mmio.greenswap & 1) {
+    return false;
+  }
+
+  if(mmio.bldcnt.sfx != BlendControl::SFX_NONE) {
+    return false;
+  }
+
+  for(int layer = 0; layer < 6; layer++) {
+    if(mmio.bldcnt.targets[0][layer] || mmio.bldcnt.targets[1][layer]) {
+      return false;
+    }
+  }
+
+  const u16 latched_dispcnt_and_current_dispcnt = mmio.dispcnt_latch[0] & mmio.dispcnt.hword;
+
+  if(latched_dispcnt_and_current_dispcnt & (256U << LAYER_OBJ)) {
+    return false;
+  }
+
+  if(mmio.dispcnt.enable[ENABLE_WIN0] || mmio.dispcnt.enable[ENABLE_WIN1]) {
+    return false;
+  }
+
+  if(mmio.dispcnt.enable[ENABLE_OBJWIN]) {
+    return false;
+  }
+
+  if(!(latched_dispcnt_and_current_dispcnt & (256U << 2))) {
+    return false;
+  }
+
+  if(mmio.bgcnt[2].mosaic_enable) {
+    return false;
+  }
+
+  if(mmio.mosaic.bg.size_x != 1 || mmio.mosaic.bg.size_y != 1) {
+    return false;
+  }
+
+  if(mmio.mosaic.obj.size_x != 1 || mmio.mosaic.obj.size_y != 1) {
+    return false;
+  }
+
+  return true;
+}
+
+void PPU::FastMergeBitmapScanlineImpl(int cycles) {
+  const int y = mmio.vcount;
+  const int out_row = y * 240;
+  const u16 backdrop = read<u16>(pram, 0);
+
+  for(int x = 0; x < 240; x++) {
+    const u32 bg_color = bg.buffer[x][2];
+    u16 color;
+
+    if(bg_color == 0U) {
+      color = backdrop;
+    } else if(bg_color & 0x8000'0000U) {
+      color = static_cast<u16>(bg_color & 0x7FFFU);
+    } else {
+      color = read<u16>(pram, (bg_color & 0xFFU) << 1);
+    }
+
+#if defined(PLATFORM_DREAMCAST)
+    if(config->video_rgb565_output) {
+      output565[frame][out_row + x] = RGB555ToRGB565(color);
+    } else
+#endif
+    {
+      output[frame][out_row + x] = RGB555(color);
+    }
+  }
+
+  merge.cycle = std::min(1006U, merge.cycle + static_cast<uint>(cycles));
+  merge.mosaic_x[0] = 0U;
+  merge.mosaic_x[1] = 0U;
+}
+
 void PPU::DrawMergeImpl(int cycles) {
+  if(CanUseFastBitmapMerge() && merge.cycle == 0U && cycles >= 960) {
+    FastMergeBitmapScanlineImpl(cycles);
+    return;
+  }
+
   static constexpr int k_min_max_bg[8][2] {
     {0,  3}, // Mode 0 (BG0 - BG3 text-mode)
     {0,  2}, // Mode 1 (BG0 - BG1 text-mode, BG2 affine)

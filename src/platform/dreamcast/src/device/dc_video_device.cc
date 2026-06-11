@@ -140,20 +140,24 @@ void DCVideoDevice::ConvertFrameToTexture(u32* buffer) {
 void DCVideoDevice::UploadRgb565Frame(u16* buffer) {
   NBA_DC_FRAME_TIMING_SCOPE(Conv);
 
+  u16* const texture_base = reinterpret_cast<u16*>(texture_vram_);
   for(int y = 0; y < kGBAHeight; y++) {
-    u16* row = texture_staging_ + y * kTextureStride;
+    u16* row = texture_base + y * kTextureStride;
     std::memcpy(row, buffer + y * kGBAWidth, kGBAWidth * sizeof(u16));
     std::memset(row + kGBAWidth, 0, (kTextureStride - kGBAWidth) * sizeof(u16));
   }
 
-  pvr_txr_load(texture_staging_, texture_vram_, kTextureBytes);
   frame_ready_ = true;
 }
 
 void DCVideoDevice::RenderScaledFramePvr() {
   NBA_DC_FRAME_TIMING_SCOPE(Pvr);
 
-  pvr_wait_ready();
+  if(pvr_scene_submitted_) {
+    pvr_wait_ready();
+    pvr_scene_submitted_ = false;
+  }
+
   pvr_scene_begin();
   pvr_list_begin(PVR_LIST_OP_POLY);
   pvr_txr_set_stride(kTextureStride);
@@ -201,6 +205,7 @@ void DCVideoDevice::RenderScaledFramePvr() {
 
   pvr_list_finish();
   pvr_scene_finish();
+  pvr_scene_submitted_ = true;
   frame_ready_ = false;
 }
 

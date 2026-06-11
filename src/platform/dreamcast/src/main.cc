@@ -118,9 +118,15 @@ static auto UpdateAutoFrameSkip(
   const float raise_threshold = speed_profile ? 56.0f : 55.0f;
   const float lower_threshold = speed_profile ? 58.5f : 57.5f;
   const int recovery_required = speed_profile ? 2 : 3;
+  const int emulated_fps = static_cast<int>(
+    measured_fps * static_cast<float>(current_frame_skip + 1) + 0.5f
+  );
 
   int next_frame_skip = current_frame_skip;
-  if(measured_fps < raise_threshold && current_frame_skip < 3) {
+  if(emulated_fps > 62 && current_frame_skip > 0) {
+    next_frame_skip--;
+    recovery_ticks = 0;
+  } else if(measured_fps < raise_threshold && current_frame_skip < 3) {
     next_frame_skip++;
     recovery_ticks = 0;
   } else if(measured_fps > lower_threshold && current_frame_skip > 0) {

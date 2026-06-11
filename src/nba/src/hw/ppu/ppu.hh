@@ -394,6 +394,8 @@ private:
   void InitMerge();
   void DrawMerge();
   void DrawMergeImpl(int cycles);
+  auto CanUseFastBitmapMerge() const -> bool;
+  void FastMergeBitmapScanlineImpl(int cycles);
 
   static auto Blend(u16 color_a, u16 color_b, int eva, int evb) -> u16;
   static auto Brighten(u16 color, int evy) -> u16;
