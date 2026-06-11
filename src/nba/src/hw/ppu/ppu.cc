@@ -182,7 +182,14 @@ void PPU::BeginHDrawVBlank() {
     vcount = 0;
 
     if(!config->suppress_video_draw) {
-      config->video_dev->Draw(output[frame]);
+#if defined(PLATFORM_DREAMCAST)
+      if(config->video_rgb565_output) {
+        config->video_dev->DrawRgb565(output565[frame]);
+      } else
+#endif
+      {
+        config->video_dev->Draw(output[frame]);
+      }
     }
     frame ^= 1;
 

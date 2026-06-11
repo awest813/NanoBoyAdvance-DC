@@ -7,6 +7,7 @@
 #include <array>
 #include <cstring>
 
+#include "../dc_frame_timing.hh"
 #include "../font_8x16.hh"
 
 #if NBA_DC_HAS_KOS
@@ -117,6 +118,8 @@ void DCVideoDevice::ShutdownPvr() {
 }
 
 void DCVideoDevice::ConvertFrameToTexture(u32* buffer) {
+  NBA_DC_FRAME_TIMING_SCOPE(Conv);
+
   const auto& lut = Rgb565Lookup();
 
   for(int y = 0; y < kGBAHeight; y++) {
@@ -134,7 +137,22 @@ void DCVideoDevice::ConvertFrameToTexture(u32* buffer) {
   frame_ready_ = true;
 }
 
+void DCVideoDevice::UploadRgb565Frame(u16* buffer) {
+  NBA_DC_FRAME_TIMING_SCOPE(Conv);
+
+  for(int y = 0; y < kGBAHeight; y++) {
+    u16* row = texture_staging_ + y * kTextureStride;
+    std::memcpy(row, buffer + y * kGBAWidth, kGBAWidth * sizeof(u16));
+    std::memset(row + kGBAWidth, 0, (kTextureStride - kGBAWidth) * sizeof(u16));
+  }
+
+  pvr_txr_load(texture_staging_, texture_vram_, kTextureBytes);
+  frame_ready_ = true;
+}
+
 void DCVideoDevice::RenderScaledFramePvr() {
+  NBA_DC_FRAME_TIMING_SCOPE(Pvr);
+
   pvr_wait_ready();
   pvr_scene_begin();
   pvr_list_begin(PVR_LIST_OP_POLY);
@@ -201,6 +219,28 @@ void DCVideoDevice::DrawSoftwareScaled(u32* buffer) {
 
       for(int x = 0; x < kGBAWidth; x++) {
         const u16 rgb565 = lut.FromRgb888(buffer[y * kGBAWidth + x]);
+
+        for(int sx = 0; sx < kScale; sx++) {
+          dst[x * kScale + sx] = rgb565;
+        }
+      }
+    }
+  }
+}
+
+void DCVideoDevice::DrawSoftwareScaledRgb565(u16* buffer) {
+  vram_base_ = (u16*)vram_s;
+  if(!vram_base_ || !buffer) {
+    return;
+  }
+
+  for(int y = 0; y < kGBAHeight; y++) {
+    for(int sy = 0; sy < kScale; sy++) {
+      const int screen_y = kOffsetY + y * kScale + sy;
+      u16* dst = vram_base_ + screen_y * kScreenWidth + kOffsetX;
+
+      for(int x = 0; x < kGBAWidth; x++) {
+        const u16 rgb565 = buffer[y * kGBAWidth + x];
 
         for(int sx = 0; sx < kScale; sx++) {
           dst[x * kScale + sx] = rgb565;
@@ -285,6 +325,24 @@ void DCVideoDevice::DrawSoftwareScaledSDL(u32* buffer) {
   for(int y = 0; y < kGBAHeight; y++) {
     for(int x = 0; x < kGBAWidth; x++) {
       const u16 rgb565 = lut.FromRgb888(buffer[y * kGBAWidth + x]);
+
+      for(int sy = 0; sy < kScale; sy++) {
+        for(int sx = 0; sx < kScale; sx++) {
+          PutPixel(kOffsetX + x * kScale + sx, kOffsetY + y * kScale + sy, rgb565);
+        }
+      }
+    }
+  }
+}
+
+void DCVideoDevice::DrawSoftwareScaledRgb565SDL(u16* buffer) {
+  if(!buffer) {
+    return;
+  }
+
+  for(int y = 0; y < kGBAHeight; y++) {
+    for(int x = 0; x < kGBAWidth; x++) {
+      const u16 rgb565 = buffer[y * kGBAWidth + x];
 
       for(int sy = 0; sy < kScale; sy++) {
         for(int sx = 0; sx < kScale; sx++) {
@@ -416,7 +474,10 @@ void DCVideoDevice::Present() {
   if(pvr_ready_ && frame_ready_) {
     RenderScaledFramePvr();
   }
-  vid_waitvbl();
+  {
+    NBA_DC_FRAME_TIMING_SCOPE(Present);
+    vid_waitvbl();
+  }
 #elif NBA_DC_HAS_SDL_MENU
   if(!sdl_renderer_ || !sdl_texture_) {
     return;
@@ -426,6 +487,26 @@ void DCVideoDevice::Present() {
   SDL_RenderClear(sdl_renderer_);
   SDL_RenderTexture(sdl_renderer_, sdl_texture_, nullptr, nullptr);
   SDL_RenderPresent(sdl_renderer_);
+#endif
+}
+
+void DCVideoDevice::DrawRgb565(u16* buffer) {
+#if NBA_DC_HAS_KOS
+  if(!buffer) {
+    return;
+  }
+
+  if(pvr_ready_) {
+    UploadRgb565Frame(buffer);
+    return;
+  }
+
+  DrawSoftwareScaledRgb565(buffer);
+#elif NBA_DC_HAS_SDL_MENU
+  DrawSoftwareScaledRgb565SDL(buffer);
+  Present();
+#else
+  (void)buffer;
 #endif
 }
 

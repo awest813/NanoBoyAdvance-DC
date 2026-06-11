@@ -339,8 +339,9 @@ A–F as checkboxes; link here for detail.
 
 Suggested checkbox granularity:
 
-- [ ] Phase A — retail baselines + GPU segment timers
-- [ ] Phase B — RGB565 PPU output + DC draw path
+- [x] Phase A (partial) — GPU segment timers (`DCFrameTiming`, env + Show FPS)
+- [ ] Phase A — retail hardware baselines
+- [x] Phase B — RGB565 PPU output + DC draw path
 - [ ] Phase C — Speed-profile PPU fast raster
 - [ ] Phase D — PVR upload/present optimization
 - [ ] Phase E — frame pipeline policy v2

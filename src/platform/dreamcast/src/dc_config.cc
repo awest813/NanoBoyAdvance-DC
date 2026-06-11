@@ -19,6 +19,7 @@ void DreamcastConfig::ApplyDefaults() {
   save_state_slot = 0;
   video.filter = PlatformConfig::Video::Filter::Nearest;
   video.color = PlatformConfig::Video::Color::No;
+  video_rgb565_output = true;
   show_fps = false;
   allow_large_roms = false;
   auto_frame_skip = false;

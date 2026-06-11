@@ -24,6 +24,15 @@ struct Config {
   // rasterization and PVR texture conversion.
   bool suppress_video_draw = false;
 
+  // When true, the PPU writes RGB565 pixels directly and calls
+  // VideoDevice::DrawRgb565 instead of expanding to RGBA8888 first.
+  bool video_rgb565_output = false;
+
+#if defined(PLATFORM_DREAMCAST)
+  using DcPpuTimingCallback = void (*)(long long microseconds);
+  DcPpuTimingCallback dc_ppu_timing_callback = nullptr;
+#endif
+
   enum class BackupType {
     Detect,
     None,

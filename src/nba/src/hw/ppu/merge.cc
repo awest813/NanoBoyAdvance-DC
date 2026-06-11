@@ -2,8 +2,23 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <algorithm>
+#include <chrono>
+
+#include <nba/common/rgb565.hh>
 
 #include "ppu.hh"
+
+#if defined(PLATFORM_DREAMCAST)
+namespace {
+
+void AddPpuTiming(const std::shared_ptr<nba::Config>& config, std::chrono::microseconds duration) {
+  if(config && config->dc_ppu_timing_callback) {
+    config->dc_ppu_timing_callback(duration.count());
+  }
+}
+
+} // namespace
+#endif
 
 namespace nba::core {
 
@@ -28,6 +43,10 @@ void PPU::InitMerge() {
 }
 
 void PPU::DrawMerge() {
+#if defined(PLATFORM_DREAMCAST)
+  const auto timing_start = std::chrono::steady_clock::now();
+#endif
+
   const u64 timestamp_now = scheduler.GetTimestampNow();
 
   const int cycles = (int)(timestamp_now - merge.timestamp_last_sync);
@@ -40,6 +59,15 @@ void PPU::DrawMerge() {
   DrawMergeImpl(cycles);
 
   merge.timestamp_last_sync = timestamp_now;
+
+#if defined(PLATFORM_DREAMCAST)
+  AddPpuTiming(
+    config,
+    std::chrono::duration_cast<std::chrono::microseconds>(
+      std::chrono::steady_clock::now() - timing_start
+    )
+  );
+#endif
 }
 
 void PPU::DrawMergeImpl(int cycles) {
@@ -243,10 +271,20 @@ void PPU::DrawMergeImpl(int cycles) {
           color_r = (color_r & ~mask) | g_l;
         }
 
-        u32* out = &output[frame][mmio.vcount * 240 + (x & ~1)];
+        const int out_index = mmio.vcount * 240 + static_cast<int>(x & ~1U);
 
-        out[0] = RGB555(color_l);
-        out[1] = RGB555(color_r);
+#if defined(PLATFORM_DREAMCAST)
+        if(config->video_rgb565_output) {
+          u16* out = &output565[frame][out_index];
+          out[0] = RGB555ToRGB565(color_l);
+          out[1] = RGB555ToRGB565(color_r);
+        } else
+#endif
+        {
+          u32* out = &output[frame][out_index];
+          out[0] = RGB555(color_l);
+          out[1] = RGB555(color_r);
+        }
       } else {
         merge.color_l = colors[0];
       }

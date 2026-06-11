@@ -450,6 +450,9 @@ private:
   std::shared_ptr<Config> config;
 
   u32 output[2][240 * 160];
+#if defined(PLATFORM_DREAMCAST)
+  u16 output565[2][240 * 160];
+#endif
   int frame;
 
   bool dma3_video_transfer_running;

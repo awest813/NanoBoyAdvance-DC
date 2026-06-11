@@ -143,9 +143,10 @@ overhauling the software PPU output path and the PVR presentation pipeline.
 **Master plan:** [`PPU_GPU_OVERHAUL.md`](PPU_GPU_OVERHAUL.md) (combines all PPU/GPU
 performance planning, completed work inventory, and phased roadmap).
 
-- [ ] **Phase A** — Retail benchmark baselines + per-frame GPU segment timers
+- [x] **Phase A (partial)** — Per-frame GPU segment timers (`NBA_DC_FRAME_TIMING`, Show FPS)
+- [ ] **Phase A** — Retail benchmark baselines on hardware
       (`PPU` / `CONV` / `PVR` / `PRESENT`)
-- [ ] **Phase B** — RGB565 PPU merge output; skip RGBA8888 + conversion on DC
+- [x] **Phase B** — RGB565 PPU merge output; skip RGBA8888 + conversion on DC
 - [ ] **Phase C** — Speed-profile PPU fast raster (bitmap modes, scanline batching, SH4 tuning)
 - [ ] **Phase D** — PVR upload/present optimization (direct texture write, scene amortization)
 - [ ] **Phase E** — Frame pipeline policy v2 (`EF`-aware auto skip, catch-up model)

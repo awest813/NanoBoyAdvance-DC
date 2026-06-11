@@ -16,6 +16,7 @@
 #include "dc_paths.hh"
 #include "dc_rom_browser.hh"
 #include "dc_ui.hh"
+#include "dc_frame_timing.hh"
 #include "device/dc_video_device.hh"
 #include "device/dc_audio_device.hh"
 #include "device/dc_input.hh"
@@ -382,6 +383,10 @@ static auto LoadEmulator(
   config->audio_dev = audio_device;
   breadcrumb("Phase 4C: Audio config attached");
   config->video_dev = video_device;
+  config->video_rgb565_output = true;
+  config->dc_ppu_timing_callback = [](long long microseconds) {
+    DCFrameTiming::Instance().AddPpuMicros(std::chrono::microseconds(microseconds));
+  };
   breadcrumb("Phase 4D: Video config attached");
 
   breadcrumb("Phase 5: Core create");
@@ -447,6 +452,9 @@ static auto LoadEmulator(
   int gameplay_overlay_frames = 0;
   int active_frame_skip = config->frame_skip;
   int auto_frame_skip_recovery_ticks = 0;
+  const bool frame_timing_enabled =
+    DCFrameTiming::EnabledFromEnvironment() || config->show_fps;
+  DCFrameTiming::Instance().SetEnabled(frame_timing_enabled);
 #if NBA_DC_HAS_KOS
   int fps_frame_count = 0;
   auto fps_last_update = std::chrono::steady_clock::now();
@@ -509,9 +517,14 @@ static auto LoadEmulator(
       }
 
       if(running) {
-        core->RunForDisplayFrame(*config, active_frame_skip, [&]() {
-          cheats.Apply(*core);
-        });
+        {
+          NBA_DC_FRAME_TIMING_SCOPE(Emu);
+          DCFrameTiming::Instance().AddEmulatedFrames(active_frame_skip + 1);
+          core->RunForDisplayFrame(*config, active_frame_skip, [&]() {
+            cheats.Apply(*core);
+          });
+        }
+        DCFrameTiming::Instance().AddPresentedFrames();
 
         if(core->GetROM().HasReadError()) {
           rom_read_failed = true;
@@ -552,6 +565,7 @@ static auto LoadEmulator(
         if(elapsed_ms >= 1000) {
           measured_fps = fps_frame_count * 1000.0f / static_cast<float>(elapsed_ms);
           measured_page_misses = core->GetROM().TakePageMissCount();
+          DCFrameTiming::Instance().OnSecondTick();
           active_frame_skip = UpdateAutoFrameSkip(
             *config,
             measured_fps,
@@ -578,6 +592,7 @@ static auto LoadEmulator(
     }, [&](float fps) {
       measured_fps = fps;
       measured_page_misses = core->GetROM().TakePageMissCount();
+      DCFrameTiming::Instance().OnSecondTick();
       active_frame_skip = UpdateAutoFrameSkip(
         *config,
         measured_fps,
