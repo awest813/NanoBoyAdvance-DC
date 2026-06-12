@@ -6,9 +6,12 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <string>
 
 #if NBA_DC_HAS_KOS
 #include <dc/video.h>
+#elif NBA_DC_HAS_SDL_MENU
+#include <SDL3/SDL.h>
 #endif
 
 namespace nba {
@@ -132,6 +135,8 @@ void DCUI::ShowMessage(
 
 #if NBA_DC_HAS_KOS
     vid_waitvbl();
+#elif NBA_DC_HAS_SDL_MENU
+    SDL_Delay(16);
 #endif
   }
 }

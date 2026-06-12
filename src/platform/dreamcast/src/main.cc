@@ -246,6 +246,16 @@ static void HoldDebugBreadcrumbFrames(int frames) {
 #endif
 }
 
+static auto FormatGameplayOverlay(std::string const& message) -> std::string {
+  std::string line = message;
+  for(auto& character : line) {
+    if(character == '\n') {
+      character = ' ';
+    }
+  }
+  return line;
+}
+
 static auto LoadEmulator(
   DCUI& ui,
   DCInput& input,
@@ -670,10 +680,7 @@ static auto LoadEmulator(
     }
 
     if(gameplay_overlay_frames > 0) {
-      const auto newline = gameplay_overlay.find('\n');
-      const std::string overlay_line = newline == std::string::npos
-        ? gameplay_overlay
-        : gameplay_overlay.substr(0, newline);
+      const std::string overlay_line = FormatGameplayOverlay(gameplay_overlay);
       video_device->DrawOverlay(overlay_line.c_str());
       gameplay_overlay_frames--;
     }
@@ -718,8 +725,14 @@ static auto LoadEmulator(
         true
       );
     }
-  } else {
-    ui.DrawOverlay("Returning to menu...");
+  } else if(!save_flush_ok) {
+    ui.ShowMessage(
+      "Save Not Written",
+      "Could not write save data to disk.\n\n"
+      "Progress from this session may be\nlost.  Check the save folder in\nSettings.",
+      input,
+      true
+    );
   }
   return true;
 }
@@ -853,8 +866,16 @@ int main(int argc, char** argv) {
       // Persist settings (notably last_rom) at this quiet point with the
       // guarded one-shot writer, so the choice survives a reboot without
       // risking a filesystem hang mid-launch.
-      config->SaveDreamcastSafe(DreamcastConfig::kDefaultConfigPath);
+      if(!config->SaveDreamcastSafe(DreamcastConfig::kDefaultConfigPath)) {
+        ui.ShowMessage(
+          "Settings Not Saved",
+          "Could not write /pc/nba-dc.toml.\nLaunching anyway.",
+          input,
+          true
+        );
+      }
       RunLoadEmulator(ui, input, config, video_device, frontend_result.rom_path);
+      config->SaveDreamcastSafe(DreamcastConfig::kDefaultConfigPath);
     }
   }
 
