@@ -104,6 +104,10 @@ void Core::Run(int cycles) {
             apu.GetMP2K().SoundMainRAM(*sound_info);
           }
         }
+
+        // The HLE mixer replaces SoundMainRAM(); skip the ROM routine body.
+        cpu.ReturnFromSubroutine();
+        continue;
       }
 
       cpu.Run();
@@ -133,54 +137,84 @@ void Core::SkipBootScreen() {
   cpu.state.r15 = 0x08000000;
 }
 
+namespace {
+
+constexpr u32 kSoundMainCRC32 = 0x27EA7FCF;
+constexpr int kSoundMainLength = 48;
+constexpr size_t kSoundMainPointerReadEnd = 0x74 + sizeof(u32);
+constexpr size_t kSoundMainScanStep = 4;
+
+auto DecodeSoundMainRAMHook(u8 const* window) -> u32 {
+  u32 address;
+  std::memcpy(&address, window + 0x74, sizeof(u32));
+
+  if(address & 1) {
+    address &= ~1u;
+    address += sizeof(u16) * 2;
+  } else {
+    address &= ~3u;
+    address += sizeof(u32) * 2;
+  }
+
+  return address;
+}
+
+auto ScanBufferForSoundMain(u8 const* data, size_t size) -> u32 {
+  if(size < kSoundMainLength) {
+    return 0xFFFFFFFF;
+  }
+
+  const size_t safe_limit = size >= kSoundMainPointerReadEnd
+    ? size - kSoundMainPointerReadEnd
+    : 0;
+
+  for(size_t index = 0; index <= safe_limit; index += kSoundMainScanStep) {
+    if(crc32(data + index, kSoundMainLength) != kSoundMainCRC32) {
+      continue;
+    }
+
+    return DecodeSoundMainRAMHook(data + index);
+  }
+
+  return 0xFFFFFFFF;
+}
+
+} // namespace
+
 auto Core::SearchSoundMainRAM() -> u32 {
-  static constexpr u32 kSoundMainCRC32 = 0x27EA7FCF;
-  static constexpr int kSoundMainLength = 48;
+  auto& rom = bus.memory.rom;
+  auto& rom_vec = rom.GetRawROM();
 
-  auto& rom_vec = bus.memory.rom.GetRawROM();
-
-  if(rom_vec.size() >= kSoundMainLength) {
-    u32 address_max = rom_vec.size() - kSoundMainLength;
-
-    for(u32 address = 0; address <= address_max; address += sizeof(u16)) {
-      auto crc = crc32(&rom_vec[address], kSoundMainLength);
-
-      if(crc == kSoundMainCRC32) {
-        /* We have found SoundMain().
-         * The pointer to SoundMainRAM() is stored at offset 0x74.
-         */
-        address = read<u32>(rom_vec.data(), address + 0x74);
-        if(address & 1) {
-          address &= ~1;
-          address += sizeof(u16) * 2;
-        } else {
-          address &= ~3;
-          address += sizeof(u32) * 2;
-        }
-        return address;
-      }
+  if(rom_vec.size() >= static_cast<size_t>(kSoundMainLength)) {
+    const u32 hook = ScanBufferForSoundMain(rom_vec.data(), rom_vec.size());
+    if(hook != 0xFFFFFFFF) {
+      return hook;
     }
 
     return 0xFFFFFFFF;
   }
 
 #if defined(PLATFORM_DREAMCAST)
-  return SearchSoundMainRAMFromFile();
-#else
-  return 0xFFFFFFFF;
+  if(rom.IsPagedROM()) {
+    const u32 resident_offset = rom.FindSoundMainOffsetInResidentPages();
+    if(resident_offset != 0xFFFFFFFF) {
+      u8 window[kSoundMainPointerReadEnd];
+      if(rom.CopyRange(resident_offset, sizeof(window), window)) {
+        return DecodeSoundMainRAMHook(window);
+      }
+    }
+
+    return SearchSoundMainRAMFromFile();
+  }
 #endif
+
+  return 0xFFFFFFFF;
 }
 
 #if defined(PLATFORM_DREAMCAST)
 auto Core::SearchSoundMainRAMFromFile() -> u32 {
-  static constexpr u32 kSoundMainCRC32 = 0x27EA7FCF;
-  static constexpr int kSoundMainLength = 48;
-
-  // After finding SoundMain, we read a pointer at offset 0x74 (116 bytes).
-  // The overlap past kChunkSize must cover both the 48-byte CRC window AND
-  // the 4-byte pointer read at offset 0x74, giving 0x74 + 4 = 120 bytes.
   static constexpr size_t kChunkSize   = 64 * 1024;
-  static constexpr size_t kOverlapSize = 0x74 + sizeof(u32); // 120 bytes
+  static constexpr size_t kOverlapSize = kSoundMainPointerReadEnd;
 
   // MP2K SoundMain lives in the game-engine portion of ROM.  Capping the
   // search at 8 MiB covers virtually all GBA titles while bounding the CD
@@ -192,8 +226,8 @@ auto Core::SearchSoundMainRAMFromFile() -> u32 {
     return 0xFFFFFFFF;
   }
 
-  const size_t rom_size   = std::min(rom.GetPagedROMSize(), kMaxSearchSize);
-  const auto& rom_path    = rom.GetPagedROMPath();
+  const size_t rom_size = std::min(rom.GetPagedROMSize(), kMaxSearchSize);
+  const auto& rom_path = rom.GetPagedROMPath();
 
   auto* file = std::fopen(rom_path.c_str(), "rb");
   if(!file) {
@@ -201,42 +235,33 @@ auto Core::SearchSoundMainRAMFromFile() -> u32 {
   }
 
   std::vector<u8> chunk(kChunkSize + kOverlapSize);
-  u32 result = 0xFFFFFFFF;
-  size_t file_offset = 0;
+  size_t overlap = 0;
+  size_t bytes_scanned = 0;
 
-  while(file_offset < rom_size && result == 0xFFFFFFFF) {
-    const size_t to_read = std::min(kChunkSize + kOverlapSize, rom_size - file_offset);
-    if(std::fseek(file, static_cast<long>(file_offset), SEEK_SET) != 0) break;
-    const size_t bytes_read = std::fread(chunk.data(), 1, to_read, file);
-    if(bytes_read < static_cast<size_t>(kSoundMainLength)) break;
-
-    // Only scan positions where the full 48-byte CRC window AND the 120-byte
-    // pointer read both fit within the buffer we actually read.
-    const size_t safe_limit = (bytes_read >= kOverlapSize)
-      ? std::min(bytes_read - kOverlapSize, kChunkSize)
-      : 0;
-
-    for(size_t i = 0; i <= safe_limit; i += sizeof(u16)) {
-      if(crc32(&chunk[i], kSoundMainLength) == kSoundMainCRC32) {
-        u32 address;
-        std::memcpy(&address, &chunk[i + 0x74], sizeof(u32));
-        if(address & 1) {
-          address &= ~1u;
-          address += sizeof(u16) * 2;
-        } else {
-          address &= ~3u;
-          address += sizeof(u32) * 2;
-        }
-        result = address;
-        break;
-      }
+  while(bytes_scanned < rom_size) {
+    const size_t to_read = std::min(kChunkSize, rom_size - bytes_scanned);
+    const size_t bytes_read = std::fread(chunk.data() + overlap, 1, to_read, file);
+    if(bytes_read == 0) {
+      break;
     }
 
-    file_offset += kChunkSize;
+    const size_t buffer_size = overlap + bytes_read;
+    const u32 hook = ScanBufferForSoundMain(chunk.data(), buffer_size);
+    if(hook != 0xFFFFFFFF) {
+      std::fclose(file);
+      return hook;
+    }
+
+    overlap = std::min(kOverlapSize, buffer_size);
+    if(overlap > 0) {
+      std::memmove(chunk.data(), chunk.data() + buffer_size - overlap, overlap);
+    }
+
+    bytes_scanned += bytes_read;
   }
 
   std::fclose(file);
-  return result;
+  return 0xFFFFFFFF;
 }
 #endif
 

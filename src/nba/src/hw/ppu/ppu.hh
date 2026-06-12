@@ -148,9 +148,17 @@ struct PPU {
     // @todo: only update the window when it is necessary or else
     // we will have a major performance caveat due to the window being updated
     // during V-blank and games typically updating graphics during V-blank.
+    if(config->suppress_video_draw) {
+      return;
+    }
+
     DrawBackground();
     DrawSprite();
-    DrawWindow();
+
+    if(HasActiveWindows()) {
+      DrawWindow();
+    }
+
     DrawMerge();
   }
 
@@ -292,6 +300,16 @@ private:
   void InitBackground();
   void DrawBackground();
   template<int mode> void DrawBackgroundImpl(int cycles);
+  auto CanUseFastTextBackground(int mode) const -> bool;
+  auto CanUseFastBitmapBackground(int mode) const -> bool;
+  auto TryFastBackgroundScanline(int mode, int cycles) -> bool;
+  void FastRenderMode0BGScanline(int id);
+  void FastRenderMode2BGScanline(int id);
+  void FastRenderMode3BGScanline();
+  void FastRenderMode4BGScanline();
+  void FastRenderMode5BGScanline();
+  void FinishBackgroundScanline(int mode, int cycles);
+  void AdvanceSuppressedRasterScanline();
 
   struct Sprite {
     u64 timestamp_init = 0;
@@ -363,6 +381,10 @@ private:
   void DrawSpriteImpl(int cycles);
   void DrawSpriteFetchOAM(uint cycle);
   void DrawSpriteFetchVRAM(uint cycle);
+  auto CanUseFastSpriteScanline() const -> bool;
+  auto TryFastSpriteScanline(int cycles) -> bool;
+  auto FastDrawSpriteScanlineImpl(int vcount) -> bool;
+  void FinishSpriteScanline(int cycles);
 
   struct Window {
     u64 timestamp_last_sync;
@@ -394,6 +416,12 @@ private:
   void InitMerge();
   void DrawMerge();
   void DrawMergeImpl(int cycles);
+  auto CanUseFastSimpleMerge() const -> bool;
+  auto CanUseFastBitmapMerge() const -> bool;
+  auto CanUseFastTextMerge(bool& enable_obj) const -> bool;
+  void FastMergeBitmapScanlineImpl(int cycles);
+  void FastMergeTextScanlineImpl(int cycles, bool enable_obj);
+  void WriteMergedPixel(int out_index, u16 color);
 
   static auto Blend(u16 color_a, u16 color_b, int eva, int evb) -> u16;
   static auto Brighten(u16 color, int evy) -> u16;
@@ -401,6 +429,13 @@ private:
 
   bool ALWAYS_INLINE ForcedBlank() const {
     return (mmio.dispcnt_latch[0] | mmio.dispcnt.hword) & 0x80U;
+  }
+
+  bool ALWAYS_INLINE HasActiveWindows() const {
+    const u16 dispcnt = mmio.dispcnt_latch[0] & mmio.dispcnt.hword;
+    return mmio.dispcnt.enable[ENABLE_WIN0] ||
+           mmio.dispcnt.enable[ENABLE_WIN1] ||
+           (mmio.dispcnt.enable[ENABLE_OBJWIN] && (dispcnt & (256U << LAYER_OBJ)));
   }
 
   auto ALWAYS_INLINE FetchPRAM(uint cycle, uint address) -> u16 {
@@ -450,6 +485,9 @@ private:
   std::shared_ptr<Config> config;
 
   u32 output[2][240 * 160];
+#if defined(PLATFORM_DREAMCAST)
+  u16 output565[2][240 * 160];
+#endif
   int frame;
 
   bool dma3_video_transfer_running;

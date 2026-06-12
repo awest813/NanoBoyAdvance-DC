@@ -25,7 +25,8 @@ struct DCUI {
     std::vector<std::string> const& items,
     int selection,
     int scroll_offset,
-    std::string_view status = "A=Select  B=Back  Y=Settings  Start=Loader"
+    std::string_view status = "A=Select  B=Back  Y=Settings  Start=Loader",
+    DCInput* input = nullptr
   );
   void DrawStatusBar(std::string_view text);
   void DrawOverlay(std::string_view text);

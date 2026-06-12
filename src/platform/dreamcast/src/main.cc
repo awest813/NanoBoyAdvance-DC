@@ -16,6 +16,7 @@
 #include "dc_paths.hh"
 #include "dc_rom_browser.hh"
 #include "dc_ui.hh"
+#include "dc_frame_timing.hh"
 #include "device/dc_video_device.hh"
 #include "device/dc_audio_device.hh"
 #include "device/dc_input.hh"
@@ -105,20 +106,41 @@ static auto UpdateAutoFrameSkip(
   DreamcastConfig& config,
   float measured_fps,
   int current_frame_skip,
-  int& recovery_ticks
+  int& recovery_ticks,
+  double emu_ms_per_display_frame = 0.0
 ) -> int {
   if(!config.auto_frame_skip || measured_fps <= 0.0f) {
     recovery_ticks = 0;
     return config.frame_skip;
   }
 
+  const bool speed_profile =
+    config.performance_profile == DreamcastConfig::PerformanceProfile::Speed;
+  const float raise_threshold = speed_profile ? 56.0f : 55.0f;
+  const float lower_threshold = speed_profile ? 58.5f : 57.5f;
+  const int recovery_required = speed_profile ? 2 : 3;
+  const int emulated_fps = static_cast<int>(
+    measured_fps * static_cast<float>(current_frame_skip + 1) + 0.5f
+  );
+
   int next_frame_skip = current_frame_skip;
-  if(measured_fps < 55.0f && current_frame_skip < 3) {
+  if(emulated_fps > 62 && current_frame_skip > 0) {
+    next_frame_skip--;
+    recovery_ticks = 0;
+  } else if(
+    speed_profile &&
+    emu_ms_per_display_frame > 0.0 &&
+    emu_ms_per_display_frame < 14.5 &&
+    current_frame_skip > 0
+  ) {
+    next_frame_skip--;
+    recovery_ticks = 0;
+  } else if(measured_fps < raise_threshold && current_frame_skip < 3) {
     next_frame_skip++;
     recovery_ticks = 0;
-  } else if(measured_fps > 57.5f && current_frame_skip > 0) {
+  } else if(measured_fps > lower_threshold && current_frame_skip > 0) {
     recovery_ticks++;
-    if(recovery_ticks >= 3) {
+    if(recovery_ticks >= recovery_required) {
       next_frame_skip--;
       recovery_ticks = 0;
     }
@@ -376,6 +398,10 @@ static auto LoadEmulator(
   config->audio_dev = audio_device;
   breadcrumb("Phase 4C: Audio config attached");
   config->video_dev = video_device;
+  config->video_rgb565_output = true;
+  config->dc_ppu_timing_callback = [](long long microseconds) {
+    DCFrameTiming::Instance().AddPpuMicros(std::chrono::microseconds(microseconds));
+  };
   breadcrumb("Phase 4D: Video config attached");
 
   breadcrumb("Phase 5: Core create");
@@ -441,6 +467,9 @@ static auto LoadEmulator(
   int gameplay_overlay_frames = 0;
   int active_frame_skip = config->frame_skip;
   int auto_frame_skip_recovery_ticks = 0;
+  const bool frame_timing_enabled =
+    DCFrameTiming::EnabledFromEnvironment() || config->show_fps;
+  DCFrameTiming::Instance().SetEnabled(frame_timing_enabled);
 #if NBA_DC_HAS_KOS
   int fps_frame_count = 0;
   auto fps_last_update = std::chrono::steady_clock::now();
@@ -475,6 +504,10 @@ static auto LoadEmulator(
         if(menu_action == DCGameplayMenu::Action::ExitToBrowser) {
           running = false;
         }
+
+        if(!config->auto_frame_skip) {
+          active_frame_skip = config->frame_skip;
+        }
 #if !NBA_DC_HAS_KOS
         return;
 #else
@@ -503,19 +536,19 @@ static auto LoadEmulator(
       }
 
       if(running) {
-        cheats.Apply(*core);
-
-        for(int skip = 0; skip <= active_frame_skip; skip++) {
-          config->suppress_video_draw = skip < active_frame_skip;
-          core->RunForOneFrame();
-          if(core->GetROM().HasReadError()) {
-            rom_read_failed = true;
-            running = false;
-            break;
-          }
+        {
+          NBA_DC_FRAME_TIMING_SCOPE(Emu);
+          DCFrameTiming::Instance().AddEmulatedFrames(active_frame_skip + 1);
+          core->RunForDisplayFrame(*config, active_frame_skip, [&]() {
+            cheats.Apply(*core);
+          });
         }
+        DCFrameTiming::Instance().AddPresentedFrames();
 
-        config->suppress_video_draw = false;
+        if(core->GetROM().HasReadError()) {
+          rom_read_failed = true;
+          running = false;
+        }
 
         if(max_frames > 0) {
           frames_run++;
@@ -551,17 +584,26 @@ static auto LoadEmulator(
         if(elapsed_ms >= 1000) {
           measured_fps = fps_frame_count * 1000.0f / static_cast<float>(elapsed_ms);
           measured_page_misses = core->GetROM().TakePageMissCount();
+          const double emu_ms_per_display = DCFrameTiming::Instance().EmuMsPerDisplayFrame();
+          DCFrameTiming::Instance().OnSecondTick();
           active_frame_skip = UpdateAutoFrameSkip(
             *config,
             measured_fps,
             active_frame_skip,
-            auto_frame_skip_recovery_ticks
+            auto_frame_skip_recovery_ticks,
+            emu_ms_per_display
           );
           fps_frame_count = 0;
           fps_last_update = now;
+          const int emulated_fps = static_cast<int>(
+            measured_fps * static_cast<float>(active_frame_skip + 1) + 0.5f
+          );
           std::printf(
-            "[NBA-DC] Runtime: FPS %.1f, ROM page misses %lu\n",
+            "[NBA-DC] Runtime: FPS %.1f EF %d FS %s%d PG %lu\n",
             static_cast<double>(measured_fps),
+            emulated_fps,
+            config->auto_frame_skip ? "A" : "",
+            active_frame_skip,
             static_cast<unsigned long>(measured_page_misses)
           );
           std::fflush(stdout);
@@ -571,15 +613,24 @@ static auto LoadEmulator(
     }, [&](float fps) {
       measured_fps = fps;
       measured_page_misses = core->GetROM().TakePageMissCount();
+      const double emu_ms_per_display = DCFrameTiming::Instance().EmuMsPerDisplayFrame();
+      DCFrameTiming::Instance().OnSecondTick();
       active_frame_skip = UpdateAutoFrameSkip(
         *config,
         measured_fps,
         active_frame_skip,
-        auto_frame_skip_recovery_ticks
+        auto_frame_skip_recovery_ticks,
+        emu_ms_per_display
+      );
+      const int emulated_fps = static_cast<int>(
+        measured_fps * static_cast<float>(active_frame_skip + 1) + 0.5f
       );
       std::printf(
-        "[NBA-DC] Runtime: FPS %.1f, ROM page misses %lu\n",
+        "[NBA-DC] Runtime: FPS %.1f EF %d FS %s%d PG %lu\n",
         static_cast<double>(measured_fps),
+        emulated_fps,
+        config->auto_frame_skip ? "A" : "",
+        active_frame_skip,
         static_cast<unsigned long>(measured_page_misses)
       );
       std::fflush(stdout);
@@ -595,12 +646,16 @@ static auto LoadEmulator(
 
     if(config->show_fps) {
       // Fixed width keeps stale digits from lingering as the value changes.
-      char fps_text[48];
+      const int emulated_fps = static_cast<int>(
+        measured_fps * static_cast<float>(active_frame_skip + 1) + 0.5f
+      );
+      char fps_text[56];
       std::snprintf(
         fps_text,
         sizeof(fps_text),
-        "FPS %5.1f FS %s%d PG %3lu",
+        "FPS %5.1f EF %3d FS %s%d PG %3lu",
         static_cast<double>(measured_fps),
+        emulated_fps,
         config->auto_frame_skip ? "A" : "",
         active_frame_skip,
         static_cast<unsigned long>(measured_page_misses)
@@ -608,12 +663,18 @@ static auto LoadEmulator(
       video_device->DrawText(8, 8, fps_text);
     }
 
-    if(input.IsExitHintActive()) {
+    if(!input.IsControllerConnected()) {
+      video_device->DrawOverlay("Connect a controller");
+    } else if(input.IsExitHintActive()) {
       video_device->DrawOverlay("Hold Start+A+B+X+Y to exit");
     }
 
     if(gameplay_overlay_frames > 0) {
-      video_device->DrawOverlay(gameplay_overlay.c_str());
+      const auto newline = gameplay_overlay.find('\n');
+      const std::string overlay_line = newline == std::string::npos
+        ? gameplay_overlay
+        : gameplay_overlay.substr(0, newline);
+      video_device->DrawOverlay(overlay_line.c_str());
       gameplay_overlay_frames--;
     }
 #endif
@@ -691,17 +752,33 @@ int main(int argc, char** argv) {
   ui.ClearScreen();
   ui.DrawTitle("NanoBoyAdvance");
   ui.DrawTextCentered(120, "Dreamcast Edition");
-  ui.DrawStatusBar("Loading...");
+  ui.DrawStatusBar("Loading settings...");
   ui.Present();
 
   DCInput input;
 
   auto config = std::make_shared<DreamcastConfig>();
-  config->TryLoadDreamcast(DreamcastConfig::kDefaultConfigPath);
+  const auto config_load = config->TryLoadDreamcast(DreamcastConfig::kDefaultConfigPath);
   EnsureDirectoryPOSIX(DreamcastConfig::kDefaultSaveFolder);
+  EnsureDirectoryPOSIX(DreamcastConfig::kDefaultStateFolder);
 
-  ui.DrawStatusBar("Loading frontend...");
-  ui.Present();
+  if(config_load == ConfigLoadResult::ParseError) {
+    ui.ShowMessage(
+      "Settings Error",
+      "Could not read /pc/nba-dc.toml.\nUsing default settings.\n\n"
+      "Fix the file or adjust options\nin Settings and save again.",
+      input,
+      true
+    );
+  } else if(config_load == ConfigLoadResult::EmptyFile) {
+    ui.ShowMessage(
+      "Settings Empty",
+      "/pc/nba-dc.toml is empty.\nUsing default settings.\n\n"
+      "Adjust options in Settings and\nsave to recreate the file.",
+      input,
+      true
+    );
+  }
 
   if(const char* autoboot_env = std::getenv("NBA_DC_AUTOBOOT_ROM")) {
     std::printf("[NBA-DC] Autoboot env ROM: %s\n", autoboot_env);
@@ -748,27 +825,18 @@ int main(int argc, char** argv) {
     std::fflush(stdout);
     ui.ClearScreen();
     ui.DrawTitle("NanoBoyAdvance");
-    ui.DrawTextCentered(120, "Scanning ROMs...");
-    ui.DrawStatusBar("Reading /pc/roms and /cd");
+    ui.DrawTextCentered(120, "Loading library...");
+    ui.DrawStatusBar("Scanning /pc/roms, /cd, /cd/gbaDC");
     ui.Present();
 
     auto entries = ROMBrowser::Scan(*config);
 
-    char scan_message[80];
-    std::snprintf(
-      scan_message,
-      sizeof(scan_message),
-      "Found %lu ROM%s",
+    std::printf(
+      "[NBA-DC] Frontend: found %lu ROM%s\n",
       static_cast<unsigned long>(entries.size()),
       entries.size() == 1 ? "" : "s"
     );
-    std::printf("[NBA-DC] Frontend: %s\n", scan_message);
     std::fflush(stdout);
-    ui.ClearScreen();
-    ui.DrawTitle("NanoBoyAdvance");
-    ui.DrawTextCentered(120, scan_message);
-    ui.DrawStatusBar("Opening frontend...");
-    ui.Present();
 
     auto frontend_result = DCFrontend::Run(ui, input, *config, entries);
 

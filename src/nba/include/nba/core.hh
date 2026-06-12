@@ -67,6 +67,22 @@ struct CoreBase {
   void RunForOneFrame() {
     Run(kCyclesPerFrame);
   }
+
+  // Run one presented frame plus `skipped_frames` suppressed emulated frames.
+  template<typename Callback>
+  void RunForDisplayFrame(Config& config, int skipped_frames, Callback&& per_frame) {
+    const int skip = skipped_frames < 0 ? 0 : skipped_frames;
+
+    for(int index = 0; index < skip; index++) {
+      config.suppress_video_draw = true;
+      per_frame();
+      Run(kCyclesPerFrame);
+    }
+
+    config.suppress_video_draw = false;
+    per_frame();
+    Run(kCyclesPerFrame);
+  }
 };
 
 auto CreateCore(

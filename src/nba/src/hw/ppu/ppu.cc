@@ -104,9 +104,13 @@ void PPU::BeginHDrawVDraw() {
   auto& dispstat = mmio.dispstat;
   auto& vcount = mmio.vcount;
 
-  if(!config->suppress_video_draw) {
+  if(config->suppress_video_draw) {
+    AdvanceSuppressedRasterScanline();
+  } else {
     DrawBackground();
-    DrawWindow();
+    if(HasActiveWindows()) {
+      DrawWindow();
+    }
     DrawMerge();
   }
 
@@ -133,7 +137,9 @@ void PPU::BeginHDrawVDraw() {
     scheduler.Add(1007, Scheduler::EventClass::PPU_hblank_vdraw);
   }
 
-  InitWindow();
+  if(HasActiveWindows()) {
+    InitWindow();
+  }
 }
 
 void PPU::BeginHBlankVDraw() {
@@ -152,7 +158,7 @@ void PPU::BeginHDrawVBlank() {
   auto& vcount = mmio.vcount;
   auto& dispstat = mmio.dispstat;
 
-  if(!config->suppress_video_draw) {
+  if(!config->suppress_video_draw && HasActiveWindows()) {
     DrawWindow();
   }
 
@@ -178,7 +184,14 @@ void PPU::BeginHDrawVBlank() {
     vcount = 0;
 
     if(!config->suppress_video_draw) {
-      config->video_dev->Draw(output[frame]);
+#if defined(PLATFORM_DREAMCAST)
+      if(config->video_rgb565_output) {
+        config->video_dev->DrawRgb565(output565[frame]);
+      } else
+#endif
+      {
+        config->video_dev->Draw(output[frame]);
+      }
     }
     frame ^= 1;
 
@@ -194,7 +207,9 @@ void PPU::BeginHDrawVBlank() {
 
   UpdateVideoTransferDMA();
 
-  InitWindow();
+  if(HasActiveWindows()) {
+    InitWindow();
+  }
 }
 
 void PPU::BeginHBlankVBlank() {
@@ -212,7 +227,26 @@ void PPU::BeginHBlankVBlank() {
 void PPU::BeginSpriteDrawing() {
   const uint vcount = mmio.vcount;
 
-  if(vcount < 160U && !config->suppress_video_draw) {
+  if(config->suppress_video_draw) {
+    if(vcount < 160U) {
+      FinishSpriteScanline(sprite.latch_cycle_limit);
+    }
+
+    if(vcount == 227U || vcount < 160U) {
+      std::swap(sprite.buffer_rd, sprite.buffer_wr);
+
+      if(vcount != 159U) {
+        InitSprite();
+      }
+    }
+
+    sprite.timestamp_last_sync = scheduler.GetTimestampNow();
+    sprite.cycle = 0U;
+    scheduler.Add(1232, Scheduler::EventClass::PPU_begin_sprite_fetch);
+    return;
+  }
+
+  if(vcount < 160U) {
     DrawSprite();
   }
 

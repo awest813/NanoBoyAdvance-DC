@@ -65,6 +65,10 @@ auto SaveFolderLabel(DreamcastConfig const& config) -> std::string {
   return config.save_folder;
 }
 
+auto StateFolderLabel(DreamcastConfig const& config) -> std::string {
+  return config.state_folder;
+}
+
 void AdjustPerformance(DreamcastConfig& config, int direction) {
   static constexpr std::array<DreamcastConfig::PerformanceProfile, 3> kProfiles{
     DreamcastConfig::PerformanceProfile::Accuracy,
@@ -132,6 +136,14 @@ void AdjustSaveFolder(DreamcastConfig& config, int direction) {
   config.save_folder = kPaths[index];
 }
 
+void AdjustStateFolder(DreamcastConfig& config, int direction) {
+  static constexpr std::array<const char*, 3> kPaths{"/pc/states", "/pc", "/vmu/a1"};
+  const auto current = std::find(kPaths.begin(), kPaths.end(), config.state_folder);
+  int index = current == kPaths.end() ? 0 : static_cast<int>(current - kPaths.begin());
+  index = (index + direction + static_cast<int>(kPaths.size())) % static_cast<int>(kPaths.size());
+  config.state_folder = kPaths[index];
+}
+
 static constexpr SettingRow kSettings[] {
   { "Performance", PerformanceLabel, AdjustPerformance },
   { "Show FPS", ShowFpsLabel, AdjustShowFps },
@@ -139,9 +151,18 @@ static constexpr SettingRow kSettings[] {
   { "Frame skip", FrameSkipLabel, AdjustFrameSkip },
   { "Audio buffer", AudioBufferLabel, AdjustAudioBuffer },
   { "BIOS path", BiosPathLabel, AdjustBiosPath },
-  { "ROM folder", ROMFolderLabel, AdjustROMFolder },
-  { "Save folder", SaveFolderLabel, AdjustSaveFolder }
+  { "Primary ROM folder", ROMFolderLabel, AdjustROMFolder },
+  { "Save folder", SaveFolderLabel, AdjustSaveFolder },
+  { "State folder", StateFolderLabel, AdjustStateFolder }
 };
+
+void SyncMenuScrollOffset(int selection, int& scroll_offset, int visible_rows) {
+  if(selection < scroll_offset) {
+    scroll_offset = selection;
+  } else if(selection >= scroll_offset + visible_rows) {
+    scroll_offset = selection - visible_rows + 1;
+  }
+}
 
 auto BuildMenuItems(std::vector<ROMEntry> const& entries) -> std::vector<std::string> {
   std::vector<std::string> items;
@@ -179,7 +200,8 @@ auto DCSettingsMenu::Run(
       items,
       selection,
       0,
-      "Left/Right=Adjust  A=Save on last row  B=Cancel"
+      "Left/Right=Adjust  A=Save on last row  B=Cancel",
+      &input
     );
 
     DCMenuInput menu;
@@ -195,9 +217,24 @@ auto DCSettingsMenu::Run(
       kSettings[selection].adjust(draft, 1);
     } else if(menu.confirm) {
       if(selection == item_count) {
-        config = draft;
-        config.SaveDreamcast(DreamcastConfig::kDefaultConfigPath);
-        return true;
+        const bool saved = draft.SaveDreamcastSafe(DreamcastConfig::kDefaultConfigPath);
+        if(saved) {
+          config = draft;
+          ui.ShowMessage(
+            "Settings Saved",
+            "Your settings were written to\n/pc/nba-dc.toml.",
+            input,
+            true
+          );
+          return true;
+        }
+
+        ui.ShowMessage(
+          "Save Failed",
+          "Could not write settings.\nCheck that /pc is writable.",
+          input,
+          true
+        );
       }
     } else if(menu.cancel) {
       return false;
@@ -218,7 +255,7 @@ auto DCFrontend::Run(
   if(entries.empty()) {
     ui.ShowMessage(
       "No ROMs Found",
-      "Place .gba files in /pc/roms\nor on the disc root (/cd).\n\n"
+      "Place .gba files in /pc/roms,\n/cd, or /cd/gbaDC.\n\n"
       "Press Start/Y for settings.\nPress B to return to loader.",
       input,
       false
@@ -234,7 +271,7 @@ auto DCFrontend::Run(
 
         ui.ShowMessage(
           "No ROMs Found",
-          "Place .gba files in /pc/roms\nor on the disc root (/cd).\n\n"
+          "Place .gba files in /pc/roms,\n/cd, or /cd/gbaDC.\n\n"
           "Press Start/Y for settings.\nPress B to return to loader.",
           input,
           false
@@ -246,7 +283,7 @@ auto DCFrontend::Run(
         }
         ui.ShowMessage(
           "No ROMs Found",
-          "Place .gba files in /pc/roms\nor on the disc root (/cd).\n\n"
+          "Place .gba files in /pc/roms,\n/cd, or /cd/gbaDC.\n\n"
           "Press Start/Y for settings.\nPress B to return to loader.",
           input,
           false
@@ -276,6 +313,7 @@ auto DCFrontend::Run(
   }
 
   static constexpr int kVisibleRows = 10;
+  SyncMenuScrollOffset(selection, scroll_offset, kVisibleRows);
 
   while(true) {
     ui.DrawMenu(
@@ -283,7 +321,8 @@ auto DCFrontend::Run(
       menu_items,
       selection,
       scroll_offset,
-      "A=Launch  B=Loader  Y=Settings  Start=Loader"
+      "A=Launch  B=Loader  Y=Settings  Start=Loader",
+      &input
     );
 
     DCMenuInput menu;
@@ -318,11 +357,7 @@ auto DCFrontend::Run(
       return Result{Action::ReturnToLoader, {}};
     }
 
-    if(selection < scroll_offset) {
-      scroll_offset = selection;
-    } else if(selection >= scroll_offset + kVisibleRows) {
-      scroll_offset = selection - kVisibleRows + 1;
-    }
+    SyncMenuScrollOffset(selection, scroll_offset, kVisibleRows);
 
 #if NBA_DC_HAS_KOS
     vid_waitvbl();

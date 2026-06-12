@@ -57,6 +57,7 @@ struct DCInput {
   auto PollInput(CoreBase& core, DCGameplayRequest& request) -> bool;
   auto PollMenu(DCMenuInput& menu) -> void;
   auto WaitForButton(Button button) -> void;
+  auto IsControllerConnected() const -> bool;
   auto IsExitHintActive() const -> bool;
   static void ClearKeys(CoreBase& core);
 

@@ -44,7 +44,7 @@ auto ConfirmAction(
   int selection = 0;
 
   while(true) {
-    ui.DrawMenu(title, items, selection, 0, prompt);
+    ui.DrawMenu(title, items, selection, 0, prompt, &input);
 
     DCMenuInput menu;
     input.PollMenu(menu);
@@ -77,6 +77,36 @@ auto ShowControlsHelp(DCUI& ui, DCInput& input) -> void {
   );
 }
 
+auto DescribeSaveStateWriteResult(SaveStateWriter::Result result) -> const char* {
+  switch(result) {
+    case SaveStateWriter::Result::CannotOpenFile:
+      return "Cannot create state file.\nCheck state folder is writable.";
+    case SaveStateWriter::Result::CannotWrite:
+      return "Write failed.\nDisk may be full.";
+    case SaveStateWriter::Result::Success:
+      break;
+  }
+
+  return "Save state failed";
+}
+
+auto DescribeSaveStateLoadResult(SaveStateLoader::Result result) -> const char* {
+  switch(result) {
+    case SaveStateLoader::Result::CannotFindFile:
+      return "No save state in this slot.\nSave first or pick another slot.";
+    case SaveStateLoader::Result::CannotOpenFile:
+      return "Cannot open state file.\nCheck state folder is readable.";
+    case SaveStateLoader::Result::BadImage:
+      return "State file is corrupt.\nTry another slot.";
+    case SaveStateLoader::Result::UnsupportedVersion:
+      return "State version not supported.\nSave a new state in this slot.";
+    case SaveStateLoader::Result::Success:
+      break;
+  }
+
+  return "Load state failed";
+}
+
 auto SaveStateMessage(
   std::unique_ptr<CoreBase>& core,
   DreamcastConfig& config,
@@ -95,7 +125,7 @@ auto SaveStateMessage(
     return message;
   }
 
-  return "Save state failed";
+  return DescribeSaveStateWriteResult(result);
 }
 
 auto LoadStateMessage(
@@ -111,7 +141,7 @@ auto LoadStateMessage(
     return message;
   }
 
-  return "Load state failed";
+  return DescribeSaveStateLoadResult(result);
 }
 
 auto RunCheatMenu(
@@ -150,7 +180,7 @@ auto RunCheatMenu(
     }
     items.emplace_back("Back");
 
-    ui.DrawMenu("Cheats", items, selection, scroll_offset, "A/Left/Right=Toggle  B=Back");
+    ui.DrawMenu("Cheats", items, selection, scroll_offset, "A/Left/Right=Toggle  B=Back", &input);
 
     DCMenuInput menu;
     input.PollMenu(menu);
@@ -251,7 +281,7 @@ auto DCGameplayMenu::Run(
     const auto status = status_frames > 0
       ? std::string_view{status_message}
       : std::string_view{"A=Select  B=Resume  Left/Right=Adjust slot"};
-    ui.DrawMenu("Paused", items, selection, 0, status);
+    ui.DrawMenu("Paused", items, selection, 0, status, &input);
     if(status_frames > 0) {
       status_frames--;
     }
@@ -281,15 +311,27 @@ auto DCGameplayMenu::Run(
         case PauseRow::Resume:
           return Action::Resume;
 
-        case PauseRow::SaveState:
-          status_message = SaveStateMessage(core, config, rom_path);
-          status_frames = 90;
+        case PauseRow::SaveState: {
+          const auto message = SaveStateMessage(core, config, rom_path);
+          if(message.rfind("Saved", 0) == 0) {
+            status_message = message;
+            status_frames = 90;
+          } else {
+            ui.ShowMessage("Save Failed", message, input, true);
+          }
           break;
+        }
 
-        case PauseRow::LoadState:
-          status_message = LoadStateMessage(core, config, rom_path);
-          status_frames = 90;
+        case PauseRow::LoadState: {
+          const auto message = LoadStateMessage(core, config, rom_path);
+          if(message.rfind("Loaded", 0) == 0) {
+            status_message = message;
+            status_frames = 90;
+          } else {
+            ui.ShowMessage("Load Failed", message, input, true);
+          }
           break;
+        }
 
         case PauseRow::StateSlot:
           break;

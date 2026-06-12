@@ -35,6 +35,7 @@ struct DCVideoDevice : VideoDevice {
 
   bool Initialize();
   void Draw(u32* buffer) override;
+  void DrawRgb565(u16* buffer) override;
   void ShowFatalError(const char* message);
 
   void ClearScreen();
@@ -64,12 +65,15 @@ private:
   bool InitializePvr();
   void ShutdownPvr();
   void ConvertFrameToTexture(u32* buffer);
+  void UploadRgb565Frame(u16* buffer);
   void RenderScaledFramePvr();
   void DrawSoftwareScaled(u32* buffer);
+  void DrawSoftwareScaledRgb565(u16* buffer);
 
   u16* vram_base_ = nullptr;
   bool pvr_ready_ = false;
   bool frame_ready_ = false;
+  bool pvr_scene_submitted_ = false;
   pvr_ptr_t texture_vram_ = nullptr;
   alignas(32) u16 texture_staging_[kTextureStride * kGBAHeight]{};
   pvr_poly_hdr_t poly_hdr_{};
@@ -79,6 +83,7 @@ private:
   bool InitializeSDL();
   void ShutdownSDL();
   void DrawSoftwareScaledSDL(u32* buffer);
+  void DrawSoftwareScaledRgb565SDL(u16* buffer);
   void PutPixel(int x, int y, u16 color);
 
   SDL_Window* sdl_window_ = nullptr;

@@ -175,6 +175,17 @@ auto DCInput::PollInput(CoreBase& core, DCGameplayRequest& request) -> bool {
 #endif
 }
 
+auto DCInput::IsControllerConnected() const -> bool {
+#if NBA_DC_HAS_KOS
+  cont_state_t* state = const_cast<DCInput*>(this)->ReadControllerState();
+  return state && !IsInvalidControllerState(state);
+#elif NBA_DC_HAS_SDL_MENU
+  return true;
+#else
+  return true;
+#endif
+}
+
 auto DCInput::IsExitHintActive() const -> bool {
   return exit_combo_frames_ >= kExitHintFrames &&
          exit_combo_frames_ < kExitDebounceFrames;

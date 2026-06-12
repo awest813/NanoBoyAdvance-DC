@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 #include "hw/apu/apu.hh"
 
@@ -22,6 +23,11 @@ void AudioCallback(APU* apu, s16* stream, int byte_len) {
   static constexpr float kMaxAmplitude = 0.999;
 
   const float volume = (float)std::clamp(apu->config->audio.volume, 0, 100) / 100.0f;
+
+  if(available == 0) {
+    std::memset(stream, 0, byte_len);
+    return;
+  }
 
   if(available >= samples) {
     for(int x = 0; x < samples; x++) {

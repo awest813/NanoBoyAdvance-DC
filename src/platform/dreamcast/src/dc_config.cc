@@ -19,6 +19,7 @@ void DreamcastConfig::ApplyDefaults() {
   save_state_slot = 0;
   video.filter = PlatformConfig::Video::Filter::Nearest;
   video.color = PlatformConfig::Video::Color::No;
+  video_rgb565_output = true;
   show_fps = false;
   allow_large_roms = false;
   auto_frame_skip = false;
@@ -39,6 +40,7 @@ void DreamcastConfig::ApplyPerformanceProfile(PerformanceProfile profile) {
       audio.mp2k_hle_enable = false;
       audio.interpolation = Config::Audio::Interpolation::Sinc_64;
       video.lcd_ghosting = true;
+      ppu_fast_mode = false;
       frame_skip = 0;
       audio_buffer_size = 8192;
       break;
@@ -48,6 +50,7 @@ void DreamcastConfig::ApplyPerformanceProfile(PerformanceProfile profile) {
       audio.mp2k_hle_enable = false;
       audio.interpolation = Config::Audio::Interpolation::Cosine;
       video.lcd_ghosting = false;
+      ppu_fast_mode = false;
       frame_skip = 0;
       audio_buffer_size = 4096;
       break;
@@ -57,8 +60,10 @@ void DreamcastConfig::ApplyPerformanceProfile(PerformanceProfile profile) {
       // and a deeper buffer absorbs the remaining CPU spikes.
       audio.mp2k_hle_enable = true;
       audio.mp2k_hle_cubic = false;
+      audio.mp2k_hle_force_reverb = false;
       audio.interpolation = Config::Audio::Interpolation::Cosine;
       video.lcd_ghosting = false;
+      ppu_fast_mode = true;
       skip_bios = true;
       frame_skip = 0;
       auto_frame_skip = true;
@@ -95,30 +100,32 @@ void DreamcastConfig::LoadDreamcast(std::string const& path) {
   SaveDreamcast(path);
 }
 
-void DreamcastConfig::TryLoadDreamcast(std::string const& path) {
+auto DreamcastConfig::TryLoadDreamcast(std::string const& path) -> ConfigLoadResult {
   ApplyDefaults();
 
   std::string content;
   if(!ReadDreamcastTextFile(path, content)) {
     std::printf("[NBA-DC] Config: using defaults (%s not found or unreadable)\n", path.c_str());
     std::fflush(stdout);
-    return;
+    return ConfigLoadResult::UsingDefaults;
   }
 
   if(content.empty()) {
     std::printf("[NBA-DC] Config: empty file at %s, using defaults\n", path.c_str());
     std::fflush(stdout);
-    return;
+    return ConfigLoadResult::EmptyFile;
   }
 
   try {
     LoadFromToml(toml::parse_str(content));
     std::printf("[NBA-DC] Config: loaded %s\n", path.c_str());
     std::fflush(stdout);
+    return ConfigLoadResult::Loaded;
   } catch(std::exception const& ex) {
     std::printf("[NBA-DC] Config: parse error in %s (%s), using defaults\n", path.c_str(), ex.what());
     std::fflush(stdout);
     ApplyDefaults();
+    return ConfigLoadResult::ParseError;
   }
 }
 

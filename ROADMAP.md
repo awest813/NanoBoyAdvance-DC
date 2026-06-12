@@ -121,12 +121,39 @@ without full-ROM allocations or undefined behavior after media failures.
 - [x] Use RGB565 lookup tables for gameplay frame conversion.
 - [x] Enable Auto frame skip by default on the Speed profile.
 - [x] Skip PPU scanline rasterization on suppressed frame-skip frames.
+- [x] Skip PPU sprite/init work on suppressed frame-skip frames; tune Speed
+  auto frame skip; add emulated-FPS overlay (`EF`).
 - [x] Use fixed-size paged-ROM buffers and preload ROM page 1 at attach.
 - [x] Speed profile skips BIOS splash and disables MP2K cubic filtering.
-- [ ] Lock the benchmark ROM set in `COMPATIBILITY.md`.
+- [x] Lock the benchmark ROM set in `COMPATIBILITY.md` (host CI fixtures +
+  retail placeholders).
+- [x] Capture host CI baseline FPS per profile (`COMPATIBILITY.md`, benchmark script).
 - [ ] Capture baseline FPS per profile on retail hardware.
-- [ ] Tune CPU/audio/video/cache hot paths against recorded baselines.
+- [x] Tune CPU/audio/video/cache hot paths against recorded baselines (CRC32
+  table for MP2K scan, skip LLE SoundMainRAM under HLE, Speed reverb off,
+  audio underrun fast path).
+- [ ] Re-measure benchmark ROMs on retail hardware after the tuning pass.
 - [ ] Fill compatibility tiers, recommended profiles, and known regressions.
+
+## Milestone 5: PPU / GPU Overhaul (Max Performance)
+
+**Goal:** hold ~59.7 display FPS on retail Dreamcast for heavy GBA scenes by
+overhauling the software PPU output path and the PVR presentation pipeline.
+
+**Master plan:** [`PPU_GPU_OVERHAUL.md`](PPU_GPU_OVERHAUL.md) (combines all PPU/GPU
+performance planning, completed work inventory, and phased roadmap).
+
+- [x] **Phase A (partial)** — Per-frame GPU segment timers (`NBA_DC_FRAME_TIMING`, Show FPS)
+- [ ] **Phase A** — Retail benchmark baselines on hardware
+      (`PPU` / `CONV` / `PVR` / `PRESENT`)
+- [x] **Phase B** — RGB565 PPU merge output; skip RGBA8888 + conversion on DC
+- [x] **Phase C (partial)** — BG/sprite scanline batching, merge fast paths (modes 0–5, alpha OBJ)
+- [ ] **Phase C** — Affine/rotated sprite fast path, SH4 tuning
+- [x] **Phase D (partial)** — Direct PVR texture write for RGB565; conditional `pvr_wait_ready`
+- [ ] **Phase D** — Twiddle eval, double-buffered texture upload
+- [x] **Phase E (partial)** — EF-aware auto skip + segment-timer headroom hint
+- [ ] **Phase E** — Catch-up model decoupled from skip-draw
+- [ ] **Phase F** — Research (partial PVR compositing, TA strips) — optional
 
 ## Milestone 4: Release Packaging + Contributor Workflow
 

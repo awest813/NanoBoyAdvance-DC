@@ -11,10 +11,14 @@ struct VideoDevice {
   virtual ~VideoDevice() = default;
 
   virtual void Draw(u32* buffer) = 0;
+  virtual void DrawRgb565(u16* buffer) {
+    (void)buffer;
+  }
 };
 
 struct NullVideoDevice : VideoDevice {
   void Draw(u32* buffer) final { }
+  void DrawRgb565(u16* buffer) final { (void)buffer; }
 };
 
 } // namespace nba

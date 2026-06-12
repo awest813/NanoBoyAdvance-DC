@@ -95,4 +95,56 @@ EOF
 
 run_case "Speed profile + auto frame skip" /pc/roms/test.gba 180
 
+cat >"$FIXTURES/pc/nba-dc.toml" <<'EOF'
+[dreamcast]
+performance_profile = "Speed"
+frame_skip = 2
+auto_frame_skip = false
+show_fps = true
+EOF
+
+run_case "Speed profile + manual frame skip 2" /pc/roms/test.gba 240
+
+# Regression: suppressed frames must not desync PPU raster timestamps.
+cat >"$FIXTURES/pc/nba-dc.toml" <<'EOF'
+[dreamcast]
+performance_profile = "Speed"
+frame_skip = 2
+auto_frame_skip = false
+EOF
+
+run_case "Speed profile + frame skip 2 (PPU timing)" /pc/roms/test.gba 300
+
+echo "=== Smoke: Runtime EF log line (Speed + frame skip) ==="
+log="$(mktemp)"
+NBA_DC_AUTOBOOT_ROM=/pc/roms/test.gba NBA_DC_MAX_FRAMES=180 "$BIN" >"$log" 2>&1 || {
+  cat "$log"
+  rm -f "$log"
+  exit 1
+}
+grep -q '\[NBA-DC\] Runtime: FPS .* EF [0-9]' "$log" || {
+  cat "$log"
+  rm -f "$log"
+  echo "Smoke test missing Runtime EF log line" >&2
+  exit 1
+}
+rm -f "$log"
+echo "OK: Runtime EF log line"
+
+echo "=== Smoke: Frame timing log line (NBA_DC_FRAME_TIMING=1) ==="
+log="$(mktemp)"
+NBA_DC_FRAME_TIMING=1 NBA_DC_AUTOBOOT_ROM=/pc/roms/test.gba NBA_DC_MAX_FRAMES=120 "$BIN" >"$log" 2>&1 || {
+  cat "$log"
+  rm -f "$log"
+  exit 1
+}
+grep -q '\[NBA-DC\] Frame timing: PPU' "$log" || {
+  cat "$log"
+  rm -f "$log"
+  echo "Smoke test missing Frame timing log line" >&2
+  exit 1
+}
+rm -f "$log"
+echo "OK: Frame timing log line"
+
 echo "All Dreamcast smoke tests passed."

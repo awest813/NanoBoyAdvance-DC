@@ -2,10 +2,185 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <algorithm>
+#include <chrono>
+#include <cstring>
 
 #include "ppu.hh"
+#include "ppu_timing.hh"
 
 namespace nba::core {
+
+namespace {
+
+constexpr int kSpriteSize[4][4][2] {
+  { { 8 , 8  }, { 16, 16 }, { 32, 32 }, { 64, 64 } },
+  { { 16, 8  }, { 32, 8  }, { 32, 16 }, { 64, 32 } },
+  { { 8 , 16 }, { 8 , 32 }, { 16, 32 }, { 32, 64 } },
+  { { 8 , 8  }, { 8 , 8  }, { 8 , 8  }, { 8 , 8  } },
+};
+
+} // namespace
+
+auto PPU::CanUseFastSpriteScanline() const -> bool {
+  if(!config->ppu_fast_mode || !mmio.dispcnt.enable[LAYER_OBJ]) {
+    return false;
+  }
+
+  if(mmio.mosaic.obj.size_x != 1 || mmio.mosaic.obj.size_y != 1) {
+    return false;
+  }
+
+  return true;
+}
+
+auto PPU::FastDrawSpriteScanlineImpl(int vcount) -> bool {
+  std::memset(sprite.buffer_wr, 0, sizeof(Sprite::Pixel) * 240);
+
+  const bool oam_mapping_1d = mmio.dispcnt.oam_mapping_1d != 0;
+
+  const auto plot = [&](int x, uint color_index, uint priority, int mode) {
+    if(x < 0 || x >= 240 || color_index == 0U) {
+      return;
+    }
+
+    auto& pixel = sprite.buffer_wr[x];
+    if(priority < pixel.priority || pixel.color == 0U) {
+      pixel.color = static_cast<u8>(color_index);
+      pixel.alpha = (mode == OBJ_SEMI) ? 1U : 0U;
+      pixel.priority = priority;
+      pixel.window = 0U;
+      pixel.mosaic = 0U;
+    }
+  };
+
+  for(int index = 0; index < 128; index++) {
+    const u32 attr01 = read<u32>(oam, static_cast<u32>(index) * 8U);
+    const u16 attr2 = read<u16>(oam, static_cast<u32>(index) * 8U + 4U);
+
+    if((attr01 & 0x300U) == 0x200U) {
+      continue;
+    }
+
+    const uint mode = (attr01 >> 10) & 3U;
+    if(mode == OBJ_PROHIBITED || mode == OBJ_WINDOW) {
+      return false;
+    }
+
+    if(attr01 & 0x100U) {
+      return false;
+    }
+
+    if(attr01 & (1U << 12)) {
+      return false;
+    }
+
+    s32 x = (attr01 >> 16) & 0x1FF;
+    s32 y = attr01 & 0xFF;
+    if(x >= 240) {
+      x -= 512;
+    }
+
+    const uint shape = (attr01 >> 14) & 3U;
+    const uint size = attr01 >> 30;
+    const int width = kSpriteSize[shape][size][0];
+    const int height = kSpriteSize[shape][size][1];
+    const int y_max = (y + height) & 255;
+
+    if(!((vcount >= y || y_max < y) && vcount < y_max)) {
+      continue;
+    }
+
+    const bool flip_h = (attr01 & (1U << 28)) != 0;
+    const bool flip_v = (attr01 & (1U << 29)) != 0;
+    const bool is_256 = (attr01 >> 13) & 1U;
+    const uint tile_number = attr2 & 0x3FFU;
+    const uint priority = (attr2 >> 10) & 3U;
+    const uint palette = attr2 >> 12;
+
+    int local_y = (vcount - y) & 255;
+    if(flip_v) {
+      local_y = height - 1 - local_y;
+    }
+
+    for(int local_x = 0; local_x < width; local_x++) {
+      const int screen_x = x + local_x;
+      if(screen_x < 0 || screen_x >= 240) {
+        continue;
+      }
+
+      int texture_x = flip_h ? (width - 1 - local_x) : local_x;
+      const int block_x = texture_x >> 3;
+      const int block_y = local_y >> 3;
+      const int tile_x = texture_x & 7;
+      const int tile_y = local_y & 7;
+
+      uint color_index = 0U;
+
+      if(is_256) {
+        uint tile = tile_number;
+        if(oam_mapping_1d) {
+          tile = (tile_number + block_y * (static_cast<uint>(width) >> 2) + (block_x << 1)) & 0x3FFU;
+        } else {
+          tile = ((tile_number + (block_y << 5)) & 0x3E0U) | ((tile_number + block_x) & 0x1FU);
+        }
+
+        const u32 address = 0x10000U + (tile << 5) + (tile_y << 3) + tile_x;
+        color_index = read<u8>(vram, address);
+      } else {
+        uint tile = tile_number;
+        if(oam_mapping_1d) {
+          tile = (tile_number + block_y * (static_cast<uint>(width) >> 3) + block_x) & 0x3FFU;
+        } else {
+          tile = ((tile_number + (block_y << 5)) & 0x3E0U) | ((tile_number + block_x) & 0x1FU);
+        }
+
+        const u32 address = 0x10000U + (tile << 5) + (tile_y << 2) + (tile_x >> 1);
+        const u8 data = read<u8>(vram, address);
+        color_index = (tile_x & 1) ? (data >> 4) : (data & 0x0FU);
+        if(color_index != 0U) {
+          color_index |= palette << 4;
+        }
+      }
+
+      plot(screen_x, color_index, priority, static_cast<int>(mode));
+    }
+  }
+
+  return true;
+}
+
+void PPU::FinishSpriteScanline(int cycles) {
+  sprite.cycle = std::min(sprite.latch_cycle_limit, sprite.cycle + static_cast<uint>(cycles));
+
+  auto& mosaic = mmio.mosaic;
+  if(sprite.vcount < 159) {
+    if(++mosaic.obj._counter_y == mosaic.obj.size_y) {
+      mosaic.obj._counter_y = 0;
+    } else {
+      mosaic.obj._counter_y &= 15;
+    }
+  } else {
+    mosaic.obj._counter_y = 0;
+  }
+}
+
+auto PPU::TryFastSpriteScanline(int cycles) -> bool {
+  if(!CanUseFastSpriteScanline() || sprite.cycle != 0U) {
+    return false;
+  }
+
+  if(cycles < static_cast<int>(sprite.latch_cycle_limit)) {
+    return false;
+  }
+
+  const int vcount = static_cast<int>(sprite.vcount);
+  if(!FastDrawSpriteScanlineImpl(vcount)) {
+    return false;
+  }
+
+  FinishSpriteScanline(cycles);
+  return true;
+}
 
 void PPU::InitSprite() {
   const uint vcount = mmio.vcount;
@@ -33,6 +208,10 @@ void PPU::InitSprite() {
 }
 
 void PPU::DrawSprite() {
+#if defined(PLATFORM_DREAMCAST)
+  const auto timing_start = std::chrono::steady_clock::now();
+#endif
+
   const u64 timestamp_now = scheduler.GetTimestampNow();
 
   const int cycles = (int)(timestamp_now - sprite.timestamp_last_sync);
@@ -41,9 +220,31 @@ void PPU::DrawSprite() {
     return;
   }
 
+  if(TryFastSpriteScanline(cycles)) {
+    sprite.timestamp_last_sync = timestamp_now;
+#if defined(PLATFORM_DREAMCAST)
+    AddPpuTiming(
+      config,
+      std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::steady_clock::now() - timing_start
+      )
+    );
+#endif
+    return;
+  }
+
   DrawSpriteImpl(cycles);
 
   sprite.timestamp_last_sync = timestamp_now;
+
+#if defined(PLATFORM_DREAMCAST)
+  AddPpuTiming(
+    config,
+    std::chrono::duration_cast<std::chrono::microseconds>(
+      std::chrono::steady_clock::now() - timing_start
+    )
+  );
+#endif
 }
 
 void PPU::DrawSpriteImpl(int cycles) {
@@ -79,13 +280,6 @@ void PPU::DrawSpriteImpl(int cycles) {
 }
 
 void PPU::DrawSpriteFetchOAM(uint cycle) {
-  static constexpr int k_sprite_size[4][4][2] = {
-    { { 8 , 8  }, { 16, 16 }, { 32, 32 }, { 64, 64 } }, // Square
-    { { 16, 8  }, { 32, 8  }, { 32, 16 }, { 64, 32 } }, // Horizontal
-    { { 8 , 16 }, { 8 , 32 }, { 16, 32 }, { 32, 64 } }, // Vertical
-    { { 8 , 8  }, { 8 , 8  }, { 8 , 8  }, { 8 , 8  } }  // Prohibited
-  };
-
   auto& oam_fetch = sprite.oam_fetch;
 
   if(oam_fetch.wait > 0 && !oam_fetch.delay_wait) {
@@ -136,8 +330,8 @@ void PPU::DrawSpriteFetchOAM(uint cycle) {
           const uint shape = (attr01 >> 14) & 3U;
           const uint size  =  attr01 >> 30;
 
-          const int width  = k_sprite_size[shape][size][0];
-          const int height = k_sprite_size[shape][size][1];
+          const int width  = kSpriteSize[shape][size][0];
+          const int height = kSpriteSize[shape][size][1];
 
           int half_width  = width  >> 1;
           int half_height = height >> 1;

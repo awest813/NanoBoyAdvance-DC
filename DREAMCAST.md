@@ -183,8 +183,9 @@ preset.
 
 When **Frame skip** is set to **Auto**, the runtime raises the active skip value
 when measured FPS drops below the full-speed target and slowly lowers it after
-several stable samples. The FPS overlay shows this as `FSA<n>`; manual mode is
-shown as `FS <n>`.
+several stable samples. On the **Speed** profile, auto frame skip reacts one FPS
+point sooner and recovers after two stable samples instead of three. The FPS
+overlay shows this as `FSA<n>`; manual mode is shown as `FS <n>`.
 
 ### Settings Persistence
 
@@ -280,6 +281,13 @@ src/platform/dreamcast/
 
 The Dreamcast backend reuses the core emulator library (`nba`) and the platform-core library (loaders, config, frame limiter) while providing its own device implementations.
 
+## PPU / GPU Performance Plan
+
+Detailed phased planning for software PPU and PVR presentation work lives in
+[`PPU_GPU_OVERHAUL.md`](PPU_GPU_OVERHAUL.md). That document inventories completed
+optimizations (PVR scale, frame skip, LUT conversion, etc.) and tracks the next
+phases: RGB565 merge output, fast raster paths, and PVR upload tuning.
+
 ## Performance Notes
 
 The Dreamcast SH4 at 200 MHz is significantly slower than modern desktop CPUs. Expect performance challenges with cycle-accurate GBA emulation. Built-in tuning options:
@@ -300,14 +308,19 @@ knobs. Pick the highest-fidelity profile a given game can sustain at full speed.
 | **Balanced** | Native (LLE)   | Cosine        | 0          | 4096         | Off          |
 | **Speed**    | MP2K HLE       | Cosine        | Auto (0–3) | 8192         | Off          |
 
+Speed-profile MP2K HLE uses linear resampling (no cubic filter), skips the ROM
+`SoundMainRAM()` routine body after the host mixer runs, and leaves reverb at
+each game's native strength instead of forcing a minimum level.
+
 - **Accuracy** – closest to real GBA behavior; best for light 2D titles that
   already hold full speed and benefit from accurate audio.
 - **Balanced** (default) – native audio with cheap interpolation and no frame
   skipping. Good fidelity with CPU headroom on most games.
-- **Speed** – HLE audio bypasses the GBA sound CPU, BIOS splash is skipped, and
-  **Auto frame skip** scales skipped emulated frames under load (skipped frames
-  skip PPU rasterization and PVR texture conversion). Best for the heaviest
-  titles (3D/Mode-7-heavy games).
+- **Speed** – HLE audio bypasses the GBA sound CPU (the ROM `SoundMainRAM()`
+  body is not executed once the mixer hook is detected), BIOS splash is skipped,
+  and **Auto frame skip** scales skipped emulated frames under load (skipped
+  frames skip PPU rasterization and PVR texture conversion). Best for the
+  heaviest titles (3D/Mode-7-heavy games).
 
 Switching profiles overwrites Frame skip, disables Auto frame skip, and rewrites
 Audio buffer; adjust those rows afterward to fine-tune within a profile.
@@ -320,8 +333,9 @@ configuration known to have the extra memory headroom.
 
 Enable **Show FPS** in settings to overlay the measured display frame rate in
 the top-left corner during play. The reading is averaged once per second by the
-frame limiter. The overlay also shows `FS`/`FSA` for manual/automatic frame skip
-and `PG`, the number of ROM page-cache misses since the previous FPS sample. A
+frame limiter. The overlay also shows `EF` (estimated emulated frames per second,
+display FPS × (frame skip + 1)), `FS`/`FSA` for manual/automatic frame skip, and
+`PG`, the number of ROM page-cache misses since the previous FPS sample. A
 title running at full speed reports ~59.7 FPS (the GBA's native rate);
 sustained readings below that indicate the SH4 cannot keep up at the current
 profile.
@@ -343,6 +357,12 @@ To compare profiles or measure a code change consistently:
 A suggested benchmark set spans the GBA workload range: a light 2D title, a
 sprite-heavy action title, a Mode-7 / pseudo-3D title, and an audio-heavy title.
 Record actual ROMs used in `COMPATIBILITY.md` so results stay reproducible.
+
+On the host port, `scripts/dc-host-benchmark.sh` runs the CI fixture ROMs
+(`test.gba`, `kirby.gba`) across Accuracy / Balanced / Speed and prints FPS,
+`EF` (estimated emulated FPS), frame-skip state, and ROM page-miss samples for
+regression tracking before you record retail hardware numbers. Steady-state host
+CI results are recorded in `COMPATIBILITY.md`.
 
 ### Compatibility Tiers
 
