@@ -6,18 +6,7 @@
 #include <cstring>
 
 #include "ppu.hh"
-
-#if defined(PLATFORM_DREAMCAST)
-namespace {
-
-void AddPpuTiming(const std::shared_ptr<nba::Config>& config, std::chrono::microseconds duration) {
-  if(config && config->dc_ppu_timing_callback) {
-    config->dc_ppu_timing_callback(duration.count());
-  }
-}
-
-} // namespace
-#endif
+#include "ppu_timing.hh"
 
 namespace nba::core {
 
@@ -44,47 +33,7 @@ auto PPU::CanUseFastSpriteScanline() const -> bool {
   return true;
 }
 
-auto PPU::ValidateFastSpriteOAM(int vcount) const -> bool {
-  for(int index = 0; index < 128; index++) {
-    const u32 attr01 = read<u32>(oam, static_cast<u32>(index) * 8U);
-
-    if((attr01 & 0x300U) == 0x200U) {
-      continue;
-    }
-
-    const uint mode = (attr01 >> 10) & 3U;
-    if(mode == OBJ_PROHIBITED || mode == OBJ_WINDOW) {
-      return false;
-    }
-
-    if(attr01 & 0x100U) {
-      return false;
-    }
-
-    if(attr01 & (1U << 12)) {
-      return false;
-    }
-
-    s32 x = (attr01 >> 16) & 0x1FF;
-    s32 y = attr01 & 0xFF;
-    if(x >= 240) {
-      x -= 512;
-    }
-
-    const uint shape = (attr01 >> 14) & 3U;
-    const uint size = attr01 >> 30;
-    const int height = kSpriteSize[shape][size][1];
-    const int y_max = (y + height) & 255;
-
-    if(!((vcount >= y || y_max < y) && vcount < y_max)) {
-      continue;
-    }
-  }
-
-  return true;
-}
-
-void PPU::FastDrawSpriteScanlineImpl(int vcount) {
+auto PPU::FastDrawSpriteScanlineImpl(int vcount) -> bool {
   std::memset(sprite.buffer_wr, 0, sizeof(Sprite::Pixel) * 240);
 
   const bool oam_mapping_1d = mmio.dispcnt.oam_mapping_1d != 0;
@@ -114,7 +63,15 @@ void PPU::FastDrawSpriteScanlineImpl(int vcount) {
 
     const uint mode = (attr01 >> 10) & 3U;
     if(mode == OBJ_PROHIBITED || mode == OBJ_WINDOW) {
-      continue;
+      return false;
+    }
+
+    if(attr01 & 0x100U) {
+      return false;
+    }
+
+    if(attr01 & (1U << 12)) {
+      return false;
     }
 
     s32 x = (attr01 >> 16) & 0x1FF;
@@ -147,7 +104,7 @@ void PPU::FastDrawSpriteScanlineImpl(int vcount) {
 
     for(int local_x = 0; local_x < width; local_x++) {
       const int screen_x = x + local_x;
-      if(screen_x < -1 || screen_x >= 241) {
+      if(screen_x < 0 || screen_x >= 240) {
         continue;
       }
 
@@ -162,7 +119,7 @@ void PPU::FastDrawSpriteScanlineImpl(int vcount) {
       if(is_256) {
         uint tile = tile_number;
         if(oam_mapping_1d) {
-          tile = (tile_number + block_y * (static_cast<uint>(width) >> 3) + block_x) & 0x3FFU;
+          tile = (tile_number + block_y * (static_cast<uint>(width) >> 2) + (block_x << 1)) & 0x3FFU;
         } else {
           tile = ((tile_number + (block_y << 5)) & 0x3E0U) | ((tile_number + block_x) & 0x1FU);
         }
@@ -188,6 +145,8 @@ void PPU::FastDrawSpriteScanlineImpl(int vcount) {
       plot(screen_x, color_index, priority, static_cast<int>(mode));
     }
   }
+
+  return true;
 }
 
 void PPU::FinishSpriteScanline(int cycles) {
@@ -215,11 +174,10 @@ auto PPU::TryFastSpriteScanline(int cycles) -> bool {
   }
 
   const int vcount = static_cast<int>(sprite.vcount);
-  if(!ValidateFastSpriteOAM(vcount)) {
+  if(!FastDrawSpriteScanlineImpl(vcount)) {
     return false;
   }
 
-  FastDrawSpriteScanlineImpl(vcount);
   FinishSpriteScanline(cycles);
   return true;
 }

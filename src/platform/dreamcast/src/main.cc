@@ -504,6 +504,10 @@ static auto LoadEmulator(
         if(menu_action == DCGameplayMenu::Action::ExitToBrowser) {
           running = false;
         }
+
+        if(!config->auto_frame_skip) {
+          active_frame_skip = config->frame_skip;
+        }
 #if !NBA_DC_HAS_KOS
         return;
 #else

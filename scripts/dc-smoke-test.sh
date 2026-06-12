@@ -105,6 +105,16 @@ EOF
 
 run_case "Speed profile + manual frame skip 2" /pc/roms/test.gba 240
 
+# Regression: suppressed frames must not desync PPU raster timestamps.
+cat >"$FIXTURES/pc/nba-dc.toml" <<'EOF'
+[dreamcast]
+performance_profile = "Speed"
+frame_skip = 2
+auto_frame_skip = false
+EOF
+
+run_case "Speed profile + frame skip 2 (PPU timing)" /pc/roms/test.gba 300
+
 echo "=== Smoke: Runtime EF log line (Speed + frame skip) ==="
 log="$(mktemp)"
 NBA_DC_AUTOBOOT_ROM=/pc/roms/test.gba NBA_DC_MAX_FRAMES=180 "$BIN" >"$log" 2>&1 || {

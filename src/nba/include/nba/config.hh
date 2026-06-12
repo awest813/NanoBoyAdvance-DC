@@ -19,16 +19,18 @@ struct Config {
   u32 idle_loop_eliminate_target = 0;
 
   // When true, the PPU keeps timing/IRQ/DMA state but skips scanline pixel
-  // compositing and the final video-device blit.  The Dreamcast frontend sets
-  // this on non-final frame-skip iterations so skipped frames avoid both PPU
-  // rasterization and PVR texture conversion.
+  // compositing and the final video-device blit.  Raster timestamps and affine
+  // scroll still advance each scanline.  The Dreamcast frontend sets this on
+  // non-final frame-skip iterations so skipped frames avoid PPU rasterization
+  // and PVR texture conversion.
   bool suppress_video_draw = false;
 
   // When true, the PPU writes RGB565 pixels directly and calls
   // VideoDevice::DrawRgb565 instead of expanding to RGBA8888 first.
   bool video_rgb565_output = false;
 
-  // When true, the PPU may skip cycle-accurate merge on simple bitmap modes.
+  // When true, the PPU may use scanline-batch fast paths when display state is
+  // simple (no windows, blend SFX, or mosaic).  Enabled on Dreamcast Speed.
   bool ppu_fast_mode = false;
 
 #if defined(PLATFORM_DREAMCAST)

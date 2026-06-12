@@ -148,9 +148,17 @@ struct PPU {
     // @todo: only update the window when it is necessary or else
     // we will have a major performance caveat due to the window being updated
     // during V-blank and games typically updating graphics during V-blank.
+    if(config->suppress_video_draw) {
+      return;
+    }
+
     DrawBackground();
     DrawSprite();
-    DrawWindow();
+
+    if(HasActiveWindows()) {
+      DrawWindow();
+    }
+
     DrawMerge();
   }
 
@@ -301,6 +309,7 @@ private:
   void FastRenderMode4BGScanline();
   void FastRenderMode5BGScanline();
   void FinishBackgroundScanline(int mode, int cycles);
+  void AdvanceSuppressedRasterScanline();
 
   struct Sprite {
     u64 timestamp_init = 0;
@@ -373,9 +382,8 @@ private:
   void DrawSpriteFetchOAM(uint cycle);
   void DrawSpriteFetchVRAM(uint cycle);
   auto CanUseFastSpriteScanline() const -> bool;
-  auto ValidateFastSpriteOAM(int vcount) const -> bool;
   auto TryFastSpriteScanline(int cycles) -> bool;
-  void FastDrawSpriteScanlineImpl(int vcount);
+  auto FastDrawSpriteScanlineImpl(int vcount) -> bool;
   void FinishSpriteScanline(int cycles);
 
   struct Window {

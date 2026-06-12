@@ -104,7 +104,9 @@ void PPU::BeginHDrawVDraw() {
   auto& dispstat = mmio.dispstat;
   auto& vcount = mmio.vcount;
 
-  if(!config->suppress_video_draw) {
+  if(config->suppress_video_draw) {
+    AdvanceSuppressedRasterScanline();
+  } else {
     DrawBackground();
     if(HasActiveWindows()) {
       DrawWindow();
@@ -129,15 +131,13 @@ void PPU::BeginHDrawVDraw() {
       scheduler.Add(1, Scheduler::EventClass::PPU_vblank_irq);
     }
   } else {
-    if(!config->suppress_video_draw) {
-      InitBackground();
-      InitMerge();
-    }
+    InitBackground();
+    InitMerge();
 
     scheduler.Add(1007, Scheduler::EventClass::PPU_hblank_vdraw);
   }
 
-  if(!config->suppress_video_draw && HasActiveWindows()) {
+  if(HasActiveWindows()) {
     InitWindow();
   }
 }
@@ -195,10 +195,8 @@ void PPU::BeginHDrawVBlank() {
     }
     frame ^= 1;
 
-    if(!config->suppress_video_draw) {
-      InitBackground();
-      InitMerge();
-    }
+    InitBackground();
+    InitMerge();
   } else {
     scheduler.Add(1007, Scheduler::EventClass::PPU_hblank_vblank);
 
@@ -209,7 +207,7 @@ void PPU::BeginHDrawVBlank() {
 
   UpdateVideoTransferDMA();
 
-  if(!config->suppress_video_draw && HasActiveWindows()) {
+  if(HasActiveWindows()) {
     InitWindow();
   }
 }
@@ -230,6 +228,20 @@ void PPU::BeginSpriteDrawing() {
   const uint vcount = mmio.vcount;
 
   if(config->suppress_video_draw) {
+    if(vcount < 160U) {
+      FinishSpriteScanline(sprite.latch_cycle_limit);
+    }
+
+    if(vcount == 227U || vcount < 160U) {
+      std::swap(sprite.buffer_rd, sprite.buffer_wr);
+
+      if(vcount != 159U) {
+        InitSprite();
+      }
+    }
+
+    sprite.timestamp_last_sync = scheduler.GetTimestampNow();
+    sprite.cycle = 0U;
     scheduler.Add(1232, Scheduler::EventClass::PPU_begin_sprite_fetch);
     return;
   }

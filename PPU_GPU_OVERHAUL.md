@@ -92,6 +92,8 @@ flowchart TB
 `RunForDisplayFrame(N)` runs **N suppressed** emulated frames + **1 presented** frame.
 
 On suppressed frames (`config.suppress_video_draw = true`):
+PPU raster timestamps and affine scroll still advance each scanline (no pixel
+compositing or `video_dev->Draw()`).
 
 - Skips: `DrawBackground`, `DrawMerge`, `DrawWindow`, `DrawSprite`, sprite init/swap,
   background/merge/window init, `video_dev->Draw()`

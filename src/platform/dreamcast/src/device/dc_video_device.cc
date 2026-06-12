@@ -115,6 +115,8 @@ void DCVideoDevice::ShutdownPvr() {
     pvr_shutdown();
     pvr_ready_ = false;
   }
+
+  pvr_scene_submitted_ = false;
 }
 
 void DCVideoDevice::ConvertFrameToTexture(u32* buffer) {
@@ -140,13 +142,13 @@ void DCVideoDevice::ConvertFrameToTexture(u32* buffer) {
 void DCVideoDevice::UploadRgb565Frame(u16* buffer) {
   NBA_DC_FRAME_TIMING_SCOPE(Conv);
 
-  u16* const texture_base = reinterpret_cast<u16*>(texture_vram_);
   for(int y = 0; y < kGBAHeight; y++) {
-    u16* row = texture_base + y * kTextureStride;
+    u16* row = texture_staging_ + y * kTextureStride;
     std::memcpy(row, buffer + y * kGBAWidth, kGBAWidth * sizeof(u16));
     std::memset(row + kGBAWidth, 0, (kTextureStride - kGBAWidth) * sizeof(u16));
   }
 
+  pvr_txr_load(texture_staging_, texture_vram_, kTextureBytes);
   frame_ready_ = true;
 }
 

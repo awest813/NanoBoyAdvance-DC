@@ -7,18 +7,7 @@
 #include <nba/common/rgb565.hh>
 
 #include "ppu.hh"
-
-#if defined(PLATFORM_DREAMCAST)
-namespace {
-
-void AddPpuTiming(const std::shared_ptr<nba::Config>& config, std::chrono::microseconds duration) {
-  if(config && config->dc_ppu_timing_callback) {
-    config->dc_ppu_timing_callback(duration.count());
-  }
-}
-
-} // namespace
-#endif
+#include "ppu_timing.hh"
 
 namespace nba::core {
 
@@ -87,6 +76,8 @@ auto PPU::CanUseFastSimpleMerge() const -> bool {
     return false;
   }
 
+  // First-target blend effects require the slow merge path.  Second-target
+  // flags may remain set for semi-transparent OBJ alpha over BG in fast merge.
   for(int layer = 0; layer < 6; layer++) {
     if(mmio.bldcnt.targets[0][layer]) {
       return false;

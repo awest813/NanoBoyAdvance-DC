@@ -6,19 +6,23 @@
 
 #include "ppu.hh"
 
-#if defined(PLATFORM_DREAMCAST)
-namespace {
-
-void AddPpuTiming(const std::shared_ptr<nba::Config>& config, std::chrono::microseconds duration) {
-  if(config && config->dc_ppu_timing_callback) {
-    config->dc_ppu_timing_callback(duration.count());
-  }
-}
-
-} // namespace
-#endif
+#include "ppu_timing.hh"
 
 namespace nba::core {
+
+void PPU::AdvanceSuppressedRasterScanline() {
+  const int mode = mmio.dispcnt.mode;
+
+  if(mmio.vcount < 159) {
+    FinishBackgroundScanline(mode, 1232);
+  }
+
+  const u64 timestamp_now = scheduler.GetTimestampNow();
+  bg.timestamp_last_sync = timestamp_now;
+  bg.cycle = 0U;
+  merge.timestamp_last_sync = timestamp_now;
+  merge.cycle = 0U;
+}
 
 auto PPU::CanUseFastTextBackground(int mode) const -> bool {
   if(!config->ppu_fast_mode || mode > 1) {
