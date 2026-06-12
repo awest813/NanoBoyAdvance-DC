@@ -68,13 +68,13 @@ struct ROM {
     size_t active_page_count = 0
   )   : rom_path(std::move(path))
       , rom_size(size)
+      , rom_active_page_count(active_page_count != 0
+          ? active_page_count
+          : (size > kLargeROMThreshold ? kPageCount : kSmallROMPageCount))
       , backup_sram(nullptr)
       , backup_eeprom(nullptr)
       , gpio(std::move(gpio))
-      , rom_mask(rom_mask)
-      , rom_active_page_count(active_page_count != 0
-          ? active_page_count
-          : (size > kLargeROMThreshold ? kPageCount : kSmallROMPageCount)) {
+      , rom_mask(rom_mask) {
     rom_file = std::fopen(rom_path.c_str(), "rb");
 
     if(backup != nullptr) {

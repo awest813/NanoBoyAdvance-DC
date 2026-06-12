@@ -6,8 +6,10 @@
 #include <nba/rom/backup/sram.hh>
 #include <nba/rom/header.hh>
 #include <nba/rom/rom.hh>
+#if defined(PLATFORM_DREAMCAST)
 #include <platform/loader/dc_idle_config.hh>
 #include <platform/loader/dc_virtual_fs.hh>
+#endif
 #include <platform/loader/dc_zip_rom.hh>
 #include <platform/loader/rom.hh>
 #include <atom/logger/logger.hh>
@@ -29,19 +31,6 @@ using Result = ROMLoader::Result;
 static constexpr size_t kMaxROMSize = 32 * 1024 * 1024; // 32 MiB
 static constexpr size_t kHeaderChecksumStart = 0xA0;
 static constexpr size_t kHeaderChecksumEnd = 0xBC;
-
-#if defined(PLATFORM_DREAMCAST)
-static constexpr bool kDreamcastForceFlatSmallROMs = false;
-static constexpr size_t kDreamcastFlatROMLimit = 8 * 1024 * 1024;
-
-static auto IsROMArchiveExtension(fs::path const& path) -> bool {
-  auto extension = path.extension().string();
-  for(auto& character : extension) {
-    character = static_cast<char>(std::tolower(static_cast<unsigned char>(character)));
-  }
-
-  return extension == ".zip" || extension == ".7z" || extension == ".rar" || extension == ".tar";
-}
 
 static auto ReadROMArchiveStream(ar_stream* stream, std::vector<u8>& file_data) -> Result {
   if(!stream) {
@@ -78,6 +67,19 @@ static auto ReadROMArchiveStream(ar_stream* stream, std::vector<u8>& file_data) 
 
   ar_close_archive(archive);
   return result;
+}
+
+#if defined(PLATFORM_DREAMCAST)
+static constexpr bool kDreamcastForceFlatSmallROMs = false;
+static constexpr size_t kDreamcastFlatROMLimit = 8 * 1024 * 1024;
+
+static auto IsROMArchiveExtension(fs::path const& path) -> bool {
+  auto extension = path.extension().string();
+  for(auto& character : extension) {
+    character = static_cast<char>(std::tolower(static_cast<unsigned char>(character)));
+  }
+
+  return extension == ".zip" || extension == ".7z" || extension == ".rar" || extension == ".tar";
 }
 
 static auto ReadDreamcastArchive(fs::path const& path, std::vector<u8>& file_data) -> Result {
@@ -321,6 +323,7 @@ static auto ParseROMHeader(std::vector<u8> const& file_data) -> ParsedROMHeader 
   return info;
 }
 
+#if defined(PLATFORM_DREAMCAST)
 static void ApplyDreamcastIdleTuning(Config* tuning_config, ParsedROMHeader const& header_info) {
   if(tuning_config == nullptr) {
     return;
@@ -350,6 +353,7 @@ static void TraceROMHeader(ParsedROMHeader const& info, fs::path const& path) {
   );
   std::fflush(stdout);
 }
+#endif
 
 static auto ValidateROMData(std::vector<u8> const& file_data) -> ROMLoader::Result {
   auto size = file_data.size();
