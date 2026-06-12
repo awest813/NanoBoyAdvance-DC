@@ -121,4 +121,20 @@ grep -q '\[NBA-DC\] Runtime: FPS .* EF [0-9]' "$log" || {
 rm -f "$log"
 echo "OK: Runtime EF log line"
 
+echo "=== Smoke: Frame timing log line (NBA_DC_FRAME_TIMING=1) ==="
+log="$(mktemp)"
+NBA_DC_FRAME_TIMING=1 NBA_DC_AUTOBOOT_ROM=/pc/roms/test.gba NBA_DC_MAX_FRAMES=120 "$BIN" >"$log" 2>&1 || {
+  cat "$log"
+  rm -f "$log"
+  exit 1
+}
+grep -q '\[NBA-DC\] Frame timing: PPU' "$log" || {
+  cat "$log"
+  rm -f "$log"
+  echo "Smoke test missing Frame timing log line" >&2
+  exit 1
+}
+rm -f "$log"
+echo "OK: Frame timing log line"
+
 echo "All Dreamcast smoke tests passed."

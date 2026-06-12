@@ -88,7 +88,7 @@ auto PPU::CanUseFastSimpleMerge() const -> bool {
   }
 
   for(int layer = 0; layer < 6; layer++) {
-    if(mmio.bldcnt.targets[0][layer] || mmio.bldcnt.targets[1][layer]) {
+    if(mmio.bldcnt.targets[0][layer]) {
       return false;
     }
   }
@@ -234,6 +234,7 @@ void PPU::FastMergeTextScanlineImpl(int cycles, bool enable_obj) {
   for(int x = 0; x < 240; x++) {
     u16 color = backdrop;
     int top_bg_priority = 4;
+    int top_bg_id = LAYER_BD;
 
     for(int index = 0; index < bg_count; index++) {
       const int bg_id = bg_list[index];
@@ -242,6 +243,7 @@ void PPU::FastMergeTextScanlineImpl(int cycles, bool enable_obj) {
       if(bg_color != 0U) {
         color = read<u16>(pram, bg_color << 1);
         top_bg_priority = mmio.bgcnt[bg_id].priority;
+        top_bg_id = bg_id;
         break;
       }
     }
@@ -250,7 +252,13 @@ void PPU::FastMergeTextScanlineImpl(int cycles, bool enable_obj) {
       const auto& pixel = sprite.buffer_rd[x];
 
       if(pixel.color != 0U && static_cast<int>(pixel.priority) <= top_bg_priority) {
-        color = read<u16>(pram, pixel.color << 1);
+        const u16 obj_color = read<u16>(pram, pixel.color << 1);
+
+        if(pixel.alpha && mmio.bldcnt.targets[1][top_bg_id]) {
+          color = Blend(obj_color, color, mmio.eva, mmio.evb);
+        } else {
+          color = obj_color;
+        }
       }
     }
 
@@ -266,22 +274,8 @@ void PPU::DrawMergeImpl(int cycles) {
   if(merge.cycle == 0U && cycles >= 960) {
     bool enable_obj = false;
     if(CanUseFastTextMerge(enable_obj)) {
-      bool use_slow_merge = false;
-
-      if(enable_obj) {
-        for(int x = 0; x < 240; x++) {
-          const auto& pixel = sprite.buffer_rd[x];
-          if(pixel.color != 0U && pixel.alpha) {
-            use_slow_merge = true;
-            break;
-          }
-        }
-      }
-
-      if(!use_slow_merge) {
-        FastMergeTextScanlineImpl(cycles, enable_obj);
-        return;
-      }
+      FastMergeTextScanlineImpl(cycles, enable_obj);
+      return;
     }
 
     if(CanUseFastBitmapMerge()) {

@@ -372,6 +372,11 @@ private:
   void DrawSpriteImpl(int cycles);
   void DrawSpriteFetchOAM(uint cycle);
   void DrawSpriteFetchVRAM(uint cycle);
+  auto CanUseFastSpriteScanline() const -> bool;
+  auto ValidateFastSpriteOAM(int vcount) const -> bool;
+  auto TryFastSpriteScanline(int cycles) -> bool;
+  void FastDrawSpriteScanlineImpl(int vcount);
+  void FinishSpriteScanline(int cycles);
 
   struct Window {
     u64 timestamp_last_sync;

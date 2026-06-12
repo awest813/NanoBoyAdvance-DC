@@ -342,8 +342,8 @@ Suggested checkbox granularity:
 - [x] Phase A (partial) — GPU segment timers (`DCFrameTiming`, env + Show FPS)
 - [ ] Phase A — retail hardware baselines
 - [x] Phase B — RGB565 PPU output + DC draw path
-- [x] Phase C (partial) — BG scanline batching + merge fast paths (modes 0–5)
-- [ ] Phase C — semi-transparent sprites, SH4 tuning
+- [x] Phase C (partial) — BG/sprite scanline batching + merge fast paths (alpha OBJ)
+- [ ] Phase C — affine sprite fast path, SH4 tuning
 - [x] Phase D (partial) — direct RGB565 PVR write, conditional scene wait
 - [ ] Phase D — twiddle eval, double-buffer upload
 - [x] Phase E (partial) — EF-aware auto skip + EMU ms/display headroom hint
