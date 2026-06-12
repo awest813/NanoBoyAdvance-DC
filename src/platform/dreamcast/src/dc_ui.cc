@@ -4,7 +4,12 @@
 #include "dc_ui.hh"
 
 #include <algorithm>
+#include <cstdio>
 #include <cstring>
+
+#if NBA_DC_HAS_KOS
+#include <dc/video.h>
+#endif
 
 namespace nba {
 
@@ -35,7 +40,8 @@ void DCUI::DrawMenu(
   std::vector<std::string> const& items,
   int selection,
   int scroll_offset,
-  std::string_view status
+  std::string_view status,
+  DCInput* input
 ) {
   ClearScreen();
   DrawTitle(title);
@@ -58,9 +64,22 @@ void DCUI::DrawMenu(
 
   if(item_count == 0) {
     DrawTextCentered(kListTop, "No items found");
+  } else if(item_count > 1) {
+    char position[24];
+    std::snprintf(
+      position,
+      sizeof(position),
+      "%d/%d",
+      std::clamp(selection, 0, item_count - 1) + 1,
+      item_count
+    );
+    DrawText(520, kListTop, position);
   }
 
   DrawStatusBar(status);
+  if(input && !input->IsControllerConnected()) {
+    DrawTextCentered(400, "Connect a controller");
+  }
   Present();
 }
 
@@ -87,7 +106,7 @@ void DCUI::ShowMessage(
   DrawTextMultiline(48, 96, message);
 
   if(wait_for_start) {
-    DrawStatusBar("Press Start to continue");
+    DrawStatusBar("Press Start or B to continue");
   }
 
   Present();
@@ -96,7 +115,25 @@ void DCUI::ShowMessage(
     return;
   }
 
-  input.WaitForButton(DCInput::Button::Start);
+  while(true) {
+    DCMenuInput menu;
+    input.PollMenu(menu);
+    if(menu.start || menu.cancel) {
+      break;
+    }
+
+    if(!input.IsControllerConnected()) {
+      ClearScreen();
+      DrawTitle(title);
+      DrawTextMultiline(48, 96, message);
+      DrawStatusBar("Connect a controller");
+      Present();
+    }
+
+#if NBA_DC_HAS_KOS
+    vid_waitvbl();
+#endif
+  }
 }
 
 void DCUI::ShowFatalError(std::string_view message, DCInput& input) {

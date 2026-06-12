@@ -663,12 +663,18 @@ static auto LoadEmulator(
       video_device->DrawText(8, 8, fps_text);
     }
 
-    if(input.IsExitHintActive()) {
+    if(!input.IsControllerConnected()) {
+      video_device->DrawOverlay("Connect a controller");
+    } else if(input.IsExitHintActive()) {
       video_device->DrawOverlay("Hold Start+A+B+X+Y to exit");
     }
 
     if(gameplay_overlay_frames > 0) {
-      video_device->DrawOverlay(gameplay_overlay.c_str());
+      const auto newline = gameplay_overlay.find('\n');
+      const std::string overlay_line = newline == std::string::npos
+        ? gameplay_overlay
+        : gameplay_overlay.substr(0, newline);
+      video_device->DrawOverlay(overlay_line.c_str());
       gameplay_overlay_frames--;
     }
 #endif
@@ -746,17 +752,33 @@ int main(int argc, char** argv) {
   ui.ClearScreen();
   ui.DrawTitle("NanoBoyAdvance");
   ui.DrawTextCentered(120, "Dreamcast Edition");
-  ui.DrawStatusBar("Loading...");
+  ui.DrawStatusBar("Loading settings...");
   ui.Present();
 
   DCInput input;
 
   auto config = std::make_shared<DreamcastConfig>();
-  config->TryLoadDreamcast(DreamcastConfig::kDefaultConfigPath);
+  const auto config_load = config->TryLoadDreamcast(DreamcastConfig::kDefaultConfigPath);
   EnsureDirectoryPOSIX(DreamcastConfig::kDefaultSaveFolder);
+  EnsureDirectoryPOSIX(DreamcastConfig::kDefaultStateFolder);
 
-  ui.DrawStatusBar("Loading frontend...");
-  ui.Present();
+  if(config_load == ConfigLoadResult::ParseError) {
+    ui.ShowMessage(
+      "Settings Error",
+      "Could not read /pc/nba-dc.toml.\nUsing default settings.\n\n"
+      "Fix the file or adjust options\nin Settings and save again.",
+      input,
+      true
+    );
+  } else if(config_load == ConfigLoadResult::EmptyFile) {
+    ui.ShowMessage(
+      "Settings Empty",
+      "/pc/nba-dc.toml is empty.\nUsing default settings.\n\n"
+      "Adjust options in Settings and\nsave to recreate the file.",
+      input,
+      true
+    );
+  }
 
   if(const char* autoboot_env = std::getenv("NBA_DC_AUTOBOOT_ROM")) {
     std::printf("[NBA-DC] Autoboot env ROM: %s\n", autoboot_env);
@@ -803,27 +825,18 @@ int main(int argc, char** argv) {
     std::fflush(stdout);
     ui.ClearScreen();
     ui.DrawTitle("NanoBoyAdvance");
-    ui.DrawTextCentered(120, "Scanning ROMs...");
-    ui.DrawStatusBar("Reading /pc/roms and /cd");
+    ui.DrawTextCentered(120, "Loading library...");
+    ui.DrawStatusBar("Scanning /pc/roms, /cd, /cd/gbaDC");
     ui.Present();
 
     auto entries = ROMBrowser::Scan(*config);
 
-    char scan_message[80];
-    std::snprintf(
-      scan_message,
-      sizeof(scan_message),
-      "Found %lu ROM%s",
+    std::printf(
+      "[NBA-DC] Frontend: found %lu ROM%s\n",
       static_cast<unsigned long>(entries.size()),
       entries.size() == 1 ? "" : "s"
     );
-    std::printf("[NBA-DC] Frontend: %s\n", scan_message);
     std::fflush(stdout);
-    ui.ClearScreen();
-    ui.DrawTitle("NanoBoyAdvance");
-    ui.DrawTextCentered(120, scan_message);
-    ui.DrawStatusBar("Opening frontend...");
-    ui.Present();
 
     auto frontend_result = DCFrontend::Run(ui, input, *config, entries);
 

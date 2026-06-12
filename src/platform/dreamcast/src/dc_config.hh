@@ -9,6 +9,13 @@
 
 namespace nba {
 
+enum class ConfigLoadResult {
+  UsingDefaults, // Config file missing or unreadable; defaults applied.
+  Loaded,        // Settings loaded successfully.
+  EmptyFile,     // Config file exists but is empty.
+  ParseError     // Config file exists but could not be parsed.
+};
+
 struct DreamcastConfig : PlatformConfig {
   static constexpr const char* kDefaultConfigPath = "/pc/nba-dc.toml";
   static constexpr const char* kDefaultBIOSPath = "/cd/bios.bin";
@@ -45,7 +52,7 @@ struct DreamcastConfig : PlatformConfig {
   void LoadDreamcast(std::string const& path);
   // Loads settings from a Dreamcast virtual path without std::filesystem or
   // auto-creating missing files.  Falls back to defaults when unreadable.
-  void TryLoadDreamcast(std::string const& path);
+  auto TryLoadDreamcast(std::string const& path) -> ConfigLoadResult;
   void SaveDreamcast(std::string const& path);
   // Best-effort config save that serializes to memory and writes the whole file
   // with a single fopen("wb"), avoiding std::filesystem and the read-modify
