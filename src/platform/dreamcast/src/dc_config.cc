@@ -41,6 +41,7 @@ void DreamcastConfig::ApplyPerformanceProfile(PerformanceProfile profile) {
       audio.interpolation = Config::Audio::Interpolation::Sinc_64;
       video.lcd_ghosting = true;
       ppu_fast_mode = false;
+      skip_bios = false;
       frame_skip = 0;
       audio_buffer_size = 8192;
       break;
@@ -51,6 +52,7 @@ void DreamcastConfig::ApplyPerformanceProfile(PerformanceProfile profile) {
       audio.interpolation = Config::Audio::Interpolation::Cosine;
       video.lcd_ghosting = false;
       ppu_fast_mode = false;
+      skip_bios = false;
       frame_skip = 0;
       audio_buffer_size = 4096;
       break;

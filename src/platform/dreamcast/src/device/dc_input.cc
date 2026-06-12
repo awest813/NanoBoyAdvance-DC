@@ -204,6 +204,13 @@ auto DCInput::PollMenu(DCMenuInput& menu) -> void {
   }
 
   const uint32 current = state->buttons;
+  if(previous_buttons_ == 0xFFFF) {
+    previous_buttons_ = current;
+    previous_joyx_ = state->joyx;
+    previous_joyy_ = state->joyy;
+    return;
+  }
+
   menu.up = ButtonPressed(current, previous_buttons_, CONT_DPAD_UP);
   menu.down = ButtonPressed(current, previous_buttons_, CONT_DPAD_DOWN);
   menu.left = ButtonPressed(current, previous_buttons_, CONT_DPAD_LEFT);
