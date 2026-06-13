@@ -57,11 +57,6 @@ static constexpr bool kDreamcastAutobootTekken = false;
 static constexpr char kDreamcastAutobootROM[] = "/cd/tekken.gba";
 static constexpr char kDreamcastAutobootROMFallback[] = "/cd/Tekken.gba";
 
-static auto IsDreamcastVirtualPath(fs::path const& path) -> bool {
-  const auto path_string = path.string();
-  return path_string.rfind("/cd/", 0) == 0 || path_string.rfind("/pc/", 0) == 0;
-}
-
 static auto GetROMSourceName(fs::path const& path) -> const char* {
   const auto path_string = path.string();
   if(path_string.rfind("/cd/", 0) == 0) {

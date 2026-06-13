@@ -249,7 +249,7 @@ struct ROM {
         continue;
       }
 
-      const size_t page_bytes = std::min(kPageSize, rom_size - page.start);
+      const size_t page_bytes = std::min(kPageSize, rom_size - static_cast<size_t>(page.start));
       if(page_bytes < static_cast<size_t>(kSoundMainLength)) {
         continue;
       }

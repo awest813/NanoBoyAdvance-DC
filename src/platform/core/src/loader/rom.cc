@@ -564,7 +564,7 @@ auto ROMLoader::Load(
       rom_mask = u32(RoundSizeToPowerOfTwo(size) - 1);
     }
 
-    const auto page_count = DreamcastPagedROMPageCount(size);
+    const auto rom_page_count = DreamcastPagedROMPageCount(size);
     DreamcastLoaderTrace("7J paged attach begin", rom_path, size);
     core->Attach(ROM{
       std::move(resolved_path),
@@ -572,7 +572,7 @@ auto ROMLoader::Load(
       std::move(backup),
       std::move(gpio),
       rom_mask,
-      page_count
+      rom_page_count
     });
     DreamcastLoaderTrace("7J paged attach ok", rom_path, size);
 
