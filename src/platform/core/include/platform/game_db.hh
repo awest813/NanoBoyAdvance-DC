@@ -4,7 +4,8 @@
 #pragma once
 
 #include <nba/config.hh>
-#include <map>
+
+#include <string_view>
 
 namespace nba {
 
@@ -20,7 +21,7 @@ struct GameInfo {
   bool mirror = false;
 };
 
-extern const std::map<std::string, GameInfo> g_game_db;
+auto LookupGameInfo(std::string_view game_code, GameInfo& game_info) -> bool;
 
 constexpr GPIODeviceType operator|(GPIODeviceType lhs, GPIODeviceType rhs) {
   return (GPIODeviceType)((int)lhs | (int)rhs);

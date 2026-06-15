@@ -3,6 +3,8 @@
 
 #include <platform/game_db.hh>
 
+#include <utility>
+
 namespace nba {
 
 /*
@@ -12,7 +14,7 @@ namespace nba {
  * TODO: it is unclear how accurate the EEPROM sizes are.
  * Since VBA guesses EEPROM sizes, the vba-over.ini did not contain the sizes.
  */
-const std::map<std::string, GameInfo> g_game_db {
+static constexpr std::pair<std::string_view, GameInfo> kGameDb[] {
   { "ALFP", { Config::BackupType::EEPROM_64,            GPIODeviceType::None,                              false } }, /* Dragon Ball Z - The Legacy of Goku II (Europe)(En,Fr,De,Es,It) */
   { "ALGP", { Config::BackupType::EEPROM_64,            GPIODeviceType::None,                              false } }, /* Dragon Ball Z - The Legacy of Goku (Europe)(En,Fr,De,Es,It) */
   { "AROP", { Config::BackupType::EEPROM_64,            GPIODeviceType::None,                              false } }, /* Rocky (Europe)(En,Fr,De,Es,It) */
@@ -129,5 +131,15 @@ const std::map<std::string, GameInfo> g_game_db {
   { "ALUE", { Config::BackupType::EEPROM_4,             GPIODeviceType::None,                              false } }, /* 0763 - Super Monkey Ball Jr. (USA) */
   { "BL8E", { Config::BackupType::EEPROM_4,             GPIODeviceType::None,                              false } }  /* 2561 - Tomb Raider - Legend  */
 };
+
+auto LookupGameInfo(std::string_view game_code, GameInfo& game_info) -> bool {
+  for(auto const& entry : kGameDb) {
+    if(entry.first == game_code) {
+      game_info = entry.second;
+      return true;
+    }
+  }
+  return false;
+}
 
 } // namespace nba

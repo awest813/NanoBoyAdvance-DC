@@ -38,7 +38,7 @@ cmake -B build-dc -G Ninja \
 cmake --build build-dc
 ```
 
-The output binary is `build-dc/bin/dreamcast/Release/NanoBoyAdvance.elf`.
+The output binary is `build-dc/bin/dreamcast/Release/NanoBoyAdvance`.
 
 ### Creating a Bootable CD Image
 
@@ -48,8 +48,8 @@ Use KallistiOS `makeip` and `mkisofs` tools:
 # Create the IP.BIN bootstrap
 makeip ip.txt IP.BIN
 
-# Scramble the ELF to 1ST_READ.BIN
-sh-elf-objcopy -O binary build-dc/bin/dreamcast/Release/NanoBoyAdvance.elf NanoBoyAdvance.bin
+# Scramble the Dreamcast executable to 1ST_READ.BIN
+sh-elf-objcopy -O binary build-dc/bin/dreamcast/Release/NanoBoyAdvance NanoBoyAdvance.bin
 /opt/toolchains/dc/kos/utils/scramble/scramble NanoBoyAdvance.bin 1ST_READ.BIN
 
 # Create disc layout directory

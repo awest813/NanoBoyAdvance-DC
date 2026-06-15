@@ -317,9 +317,7 @@ static auto ParseROMHeader(std::vector<u8> const& file_data) -> ParsedROMHeader 
   info.checksum = header->checksum;
   info.fixed_marker_ok = header->fixed_96h == 0x96;
   info.checksum_ok = HeaderChecksumMatches(file_data);
-  if(auto db_entry = g_game_db.find(info.code); db_entry != g_game_db.end()) {
-    info.game_info = db_entry->second;
-  }
+  LookupGameInfo(info.code, info.game_info);
   return info;
 }
 
@@ -737,9 +735,9 @@ auto ROMLoader::GetGameInfo(
   auto game_code = std::string{};
   game_code.assign(header->game.code, 4);
 
-  auto db_entry = g_game_db.find(game_code);
-  if(db_entry != g_game_db.end()) {
-    return db_entry->second;
+  auto game_info = GameInfo{};
+  if(LookupGameInfo(game_code, game_info)) {
+    return game_info;
   }
 
   return GameInfo{};
