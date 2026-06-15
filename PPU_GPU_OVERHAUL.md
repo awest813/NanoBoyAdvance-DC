@@ -230,6 +230,22 @@ fall back to cycle stepping when hardware would observe a change.
 **Exit:** `PVR` + `PRESENT` timer sum &lt; 2 ms on retail at 480×320; no tearing vs
 current `vid_waitvbl` behavior.
 
+#### Phase D evaluation outcomes
+
+| Task | Outcome | Rationale |
+|------|---------|-----------|
+| D.1 | **Done (staging + SQ/DMA)** | Per-pixel writes to PVR VRAM are uncached and slow; the staging buffer + `pvr_txr_load` (store queue) / `pvr_txr_load_dma` (TA DMA) is the correct path. Direct mapped write is not a win. |
+| D.2 twiddle | **Evaluated → deferred (likely regression)** | Twiddled textures cannot use stride, so the 240×160 frame would need a 256×256 twiddled surface re-interleaved on the CPU **every frame** (~77 KB bit-twiddle, est. &gt;1 ms on SH4). A single 2× quad is not texture-cache-bound, so the sampling gain cannot pay for the per-frame twiddle cost. Only revisit if profiling shows texture-cache stalls dominate `PVR`. |
+| D.3 | **Done** | Precompiled poly header; conditional `pvr_wait_ready` (only when a scene was submitted). |
+| D.4 | **Skip** | GBA produces full frames; dirty-row tracking costs ~as much as the copy. |
+| D.5 double-buffer | **Evaluated → deferred (marginal, adds latency)** | Async TA-DMA already overlaps the upload with inter-frame work. True double-buffering would only remove the residual `WaitForUploadDma` spin (~80 µs for the 82 KB transfer, &lt;1% of a 16.7 ms frame) and gives **no FPS gain** (vsync-capped / CPU-bound elsewhere), while costing **+1 frame of input latency** and two poly headers. Poor trade for an emulator. Implement behind a default-off flag only if on-hardware profiling shows the spin is significant. |
+| D.6 | **Done** | `DrawSoftwareScaled*` fallbacks retained for `pvr_init` failure. |
+
+**Conclusion:** Phase D's worthwhile wins (staging trim, compile-time present
+geometry, async TA-DMA upload, conditional scene wait) are shipped. Twiddle and
+double-buffer are **deferred with rationale**, not pending work — revisit only if
+retail `PVR`/`PRESENT` segment timers prove a bottleneck.
+
 ### Phase E — Frame pipeline policy (medium payoff, policy risk)
 
 **Goal:** Smarter display/emulated frame relationship.
@@ -351,8 +367,8 @@ Suggested checkbox granularity:
 - [x] Phase B — RGB565 PPU output + DC draw path
 - [x] Phase C (partial) — BG/sprite scanline batching + merge fast paths (alpha OBJ)
 - [ ] Phase C — affine sprite fast path, SH4 tuning
-- [x] Phase D (partial) — direct RGB565 PVR write, conditional scene wait, async TA-DMA upload
-- [ ] Phase D — twiddle eval, double-buffered texture (overlap upload with present)
+- [x] Phase D — direct RGB565 PVR write, conditional scene wait, async TA-DMA upload (+ settings toggle)
+- [x] Phase D — twiddle / double-buffer **evaluated → deferred** (see Phase D evaluation outcomes; not beneficial for per-frame full-frame upload)
 - [x] Phase E (partial) — EF-aware auto skip + EMU ms/display headroom hint
 - [ ] Phase E — catch-up decoupled from skip-draw
 - [ ] Phase F — research items (optional)

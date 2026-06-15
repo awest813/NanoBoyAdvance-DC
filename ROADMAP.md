@@ -149,8 +149,8 @@ performance planning, completed work inventory, and phased roadmap).
 - [x] **Phase B** — RGB565 PPU merge output; skip RGBA8888 + conversion on DC
 - [x] **Phase C (partial)** — BG/sprite scanline batching, merge fast paths (modes 0–5, alpha OBJ)
 - [ ] **Phase C** — Affine/rotated sprite fast path, SH4 tuning
-- [x] **Phase D (partial)** — Direct PVR texture write for RGB565; conditional `pvr_wait_ready`; async TA-DMA upload with blocking fallback
-- [ ] **Phase D** — Twiddle eval, double-buffered texture upload (overlap with present)
+- [x] **Phase D** — Direct PVR texture write for RGB565; conditional `pvr_wait_ready`; async TA-DMA upload with blocking fallback + settings toggle
+- [x] **Phase D** — Twiddle / double-buffered texture **evaluated → deferred** (not beneficial for per-frame full-frame upload; see `PPU_GPU_OVERHAUL.md`)
 - [x] **Phase E (partial)** — EF-aware auto skip + segment-timer headroom hint
 - [ ] **Phase E** — Catch-up model decoupled from skip-draw
 - [ ] **Phase F** — Research (partial PVR compositing, TA strips) — optional
