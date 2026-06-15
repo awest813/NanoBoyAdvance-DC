@@ -204,7 +204,10 @@ auto PPU::FastDrawSpriteScanlineImpl(int vcount) -> bool {
         if(oam_mapping_1d) {
           tile = (tile_number + block_y * (static_cast<uint>(width) >> 2) + (block_x << 1)) & 0x3FFU;
         } else {
-          tile = ((tile_number + (block_y << 5)) & 0x3E0U) | ((tile_number + block_x) & 0x1FU);
+          // 256-color 2D mapping: each 8x8 tile spans two 32-byte slots, so the
+          // base ignores its low bit and the column steps by two (matches the
+          // cycle-accurate CalculateTileNumber8BPP).
+          tile = ((tile_number + (block_y << 5)) & 0x3E0U) | (((tile_number & ~1U) + (block_x << 1)) & 0x1FU);
         }
 
         const u32 address = 0x10000U + (tile << 5) + (tile_y << 3) + tile_x;

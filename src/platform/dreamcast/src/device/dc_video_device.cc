@@ -165,11 +165,12 @@ void DCVideoDevice::UploadRgb565Frame(u16* buffer) {
 }
 
 void DCVideoDevice::UploadStagingToVram() {
-  if(use_dma_upload_) {
-    // A prior upload should already be finished (Present waits before the next
-    // scene), but guard against rewriting the buffer while a DMA is still live.
-    WaitForUploadDma();
+  // Never rewrite the staging buffer or VRAM, nor start a store-queue copy,
+  // while a previous DMA is still reading the buffer. Unconditional so toggling
+  // DMA off mid-session cannot leave a transfer racing the blocking path.
+  WaitForUploadDma();
 
+  if(use_dma_upload_) {
     // The DMA engine reads texture_staging_ straight from main RAM and does not
     // snoop the SH4 cache, so write back the dirty lines before starting it.
     dcache_purge_range(
