@@ -66,10 +66,6 @@ auto PPU::FastDrawSpriteScanlineImpl(int vcount) -> bool {
       return false;
     }
 
-    if(attr01 & 0x100U) {
-      return false;
-    }
-
     if(attr01 & (1U << 12)) {
       return false;
     }
@@ -84,18 +80,105 @@ auto PPU::FastDrawSpriteScanlineImpl(int vcount) -> bool {
     const uint size = attr01 >> 30;
     const int width = kSpriteSize[shape][size][0];
     const int height = kSpriteSize[shape][size][1];
-    const int y_max = (y + height) & 255;
+    const bool is_256 = (attr01 >> 13) & 1U;
+    const uint tile_number = attr2 & 0x3FFU;
+    const uint priority = (attr2 >> 10) & 3U;
+    const uint palette = attr2 >> 12;
 
+    if(attr01 & 0x100U) {
+      // Affine/rotated sprite. Mirrors the cycle-accurate affine math in
+      // DrawSpriteFetchOAM (case 0 setup + case 6 texture origin) and the
+      // affine branch of DrawSpriteFetchVRAM so the produced buffer is
+      // identical. OBJ-window/prohibited and per-sprite mosaic already bailed
+      // above, matching the conditions the fast scanline handles.
+      const bool double_size = (attr01 & 0x200U) != 0;
+      int half_width = width >> 1;
+      int half_height = height >> 1;
+      if(double_size) {
+        half_width *= 2;
+        half_height *= 2;
+      }
+
+      const int y_max = (y + half_height * 2) & 255;
+      if(!((vcount >= y || y_max < y) && vcount < y_max)) {
+        continue;
+      }
+
+      int x0 = -half_width;
+      const int y0 = ((vcount - y) & 255) - half_height;
+      int draw_x = x;
+      int remaining = half_width << 1;
+
+      if(x < 0) {
+        const int clip = -x;
+        draw_x += clip;
+        remaining -= clip;
+        x0 += clip;
+        if(remaining <= 0) {
+          continue;
+        }
+      }
+
+      const uint matrix_base = (((attr01 >> 25) & 31U) * 32U) + 6U;
+      const s16 pa = read<s16>(oam, matrix_base);
+      const s16 pb = read<s16>(oam, matrix_base + 8U);
+      const s16 pc = read<s16>(oam, matrix_base + 16U);
+      const s16 pd = read<s16>(oam, matrix_base + 24U);
+
+      int tex_x = pa * x0 + pb * y0 + (width << 7);
+      int tex_y = pc * x0 + pd * y0 + (height << 7);
+
+      for(int n = 0; n < remaining && draw_x < 240; n++, draw_x++) {
+        const int sample_x = tex_x >> 8;
+        const int sample_y = tex_y >> 8;
+
+        if(sample_x >= 0 && sample_x < width && sample_y >= 0 && sample_y < height) {
+          const int tile_x = sample_x & 7;
+          const int tile_y = sample_y & 7;
+          const int block_x = sample_x >> 3;
+          const int block_y = sample_y >> 3;
+
+          uint color_index = 0U;
+
+          if(is_256) {
+            uint tile;
+            if(oam_mapping_1d) {
+              tile = (tile_number + block_y * (static_cast<uint>(width) >> 2) + (block_x << 1)) & 0x3FFU;
+            } else {
+              tile = ((tile_number + (block_y << 5)) & 0x3E0U) | (((tile_number & ~1U) + (block_x << 1)) & 0x1FU);
+            }
+            color_index = read<u8>(vram, 0x10000U + (tile << 5) + (tile_y << 3) + tile_x);
+          } else {
+            uint tile;
+            if(oam_mapping_1d) {
+              tile = (tile_number + block_y * (static_cast<uint>(width) >> 3) + block_x) & 0x3FFU;
+            } else {
+              tile = ((tile_number + (block_y << 5)) & 0x3E0U) | ((tile_number + block_x) & 0x1FU);
+            }
+            const u8 data = read<u8>(vram, 0x10000U + (tile << 5) + (tile_y << 2) + (tile_x >> 1));
+            color_index = (tile_x & 1) ? (data >> 4) : (data & 0x0FU);
+            if(color_index != 0U) {
+              color_index |= palette << 4;
+            }
+          }
+
+          plot(draw_x, color_index, priority, static_cast<int>(mode));
+        }
+
+        tex_x += pa;
+        tex_y += pc;
+      }
+
+      continue;
+    }
+
+    const int y_max = (y + height) & 255;
     if(!((vcount >= y || y_max < y) && vcount < y_max)) {
       continue;
     }
 
     const bool flip_h = (attr01 & (1U << 28)) != 0;
     const bool flip_v = (attr01 & (1U << 29)) != 0;
-    const bool is_256 = (attr01 >> 13) & 1U;
-    const uint tile_number = attr2 & 0x3FFU;
-    const uint priority = (attr2 >> 10) & 3U;
-    const uint palette = attr2 >> 12;
 
     int local_y = (vcount - y) & 255;
     if(flip_v) {

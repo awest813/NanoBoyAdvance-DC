@@ -366,7 +366,8 @@ Suggested checkbox granularity:
 - [ ] Phase A — retail hardware baselines
 - [x] Phase B — RGB565 PPU output + DC draw path
 - [x] Phase C (partial) — BG/sprite scanline batching + merge fast paths (alpha OBJ)
-- [ ] Phase C — affine sprite fast path, SH4 tuning
+- [x] Phase C — affine/rotated sprite fast-mode scanline path (mirrors cycle math)
+- [ ] Phase C — SH4-tuned inner loops (deferred until retail segment timers identify the hot loop — Phase A.2/A.3)
 - [x] Phase D — direct RGB565 PVR write, conditional scene wait, async TA-DMA upload (+ settings toggle)
 - [x] Phase D — twiddle / double-buffer **evaluated → deferred** (see Phase D evaluation outcomes; not beneficial for per-frame full-frame upload)
 - [x] Phase E (partial) — EF-aware auto skip + EMU ms/display headroom hint

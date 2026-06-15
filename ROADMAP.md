@@ -148,7 +148,8 @@ performance planning, completed work inventory, and phased roadmap).
       (`PPU` / `CONV` / `PVR` / `PRESENT`)
 - [x] **Phase B** — RGB565 PPU merge output; skip RGBA8888 + conversion on DC
 - [x] **Phase C (partial)** — BG/sprite scanline batching, merge fast paths (modes 0–5, alpha OBJ)
-- [ ] **Phase C** — Affine/rotated sprite fast path, SH4 tuning
+- [x] **Phase C** — Affine/rotated sprite fast-mode scanline path (mirrors cycle-accurate math)
+- [ ] **Phase C** — SH4-tuned inner loops (deferred until retail segment timers identify the hot loop)
 - [x] **Phase D** — Direct PVR texture write for RGB565; conditional `pvr_wait_ready`; async TA-DMA upload with blocking fallback + settings toggle
 - [x] **Phase D** — Twiddle / double-buffered texture **evaluated → deferred** (not beneficial for per-frame full-frame upload; see `PPU_GPU_OVERHAUL.md`)
 - [x] **Phase E (partial)** — EF-aware auto skip + segment-timer headroom hint
