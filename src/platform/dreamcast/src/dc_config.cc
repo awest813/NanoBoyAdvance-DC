@@ -22,6 +22,7 @@ void DreamcastConfig::ApplyDefaults() {
   video_rgb565_output = true;
   show_fps = false;
   allow_large_roms = false;
+  pvr_dma_upload = true;
   auto_frame_skip = false;
 
   // The Balanced profile seeds the CPU/audio/video knobs (mp2k HLE,
@@ -179,6 +180,7 @@ void DreamcastConfig::LoadCustomData(toml::value const& data) {
   audio_buffer_size = toml::find_or<int>(dreamcast, "audio_buffer_size", audio_buffer_size);
   show_fps = toml::find_or<bool>(dreamcast, "show_fps", show_fps);
   allow_large_roms = toml::find_or<bool>(dreamcast, "allow_large_roms", allow_large_roms);
+  pvr_dma_upload = toml::find_or<bool>(dreamcast, "pvr_dma_upload", pvr_dma_upload);
   rom_folder = toml::find_or<std::string>(dreamcast, "rom_folder", rom_folder);
   state_folder = toml::find_or<std::string>(dreamcast, "state_folder", state_folder);
   last_rom = toml::find_or<std::string>(dreamcast, "last_rom", last_rom);
@@ -199,6 +201,7 @@ void DreamcastConfig::SaveCustomData(toml::value& data) {
   data["dreamcast"]["audio_buffer_size"] = audio_buffer_size;
   data["dreamcast"]["show_fps"] = show_fps;
   data["dreamcast"]["allow_large_roms"] = allow_large_roms;
+  data["dreamcast"]["pvr_dma_upload"] = pvr_dma_upload;
   data["dreamcast"]["rom_folder"] = rom_folder;
   data["dreamcast"]["state_folder"] = state_folder;
   data["dreamcast"]["last_rom"] = last_rom;

@@ -39,6 +39,9 @@ struct DreamcastConfig : PlatformConfig {
   int audio_buffer_size = 4096;
   bool show_fps = false;
   bool allow_large_roms = false;
+  // Use asynchronous TA DMA for the PVR texture upload (vs. the blocking
+  // store-queue copy). Exposed as a setting for on-device A/B testing.
+  bool pvr_dma_upload = true;
   PerformanceProfile performance_profile = PerformanceProfile::Balanced;
   std::string rom_folder = kDefaultROMFolder;
   std::string state_folder = kDefaultStateFolder;

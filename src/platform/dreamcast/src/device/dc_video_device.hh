@@ -38,6 +38,15 @@ struct DCVideoDevice : VideoDevice {
   void DrawRgb565(u16* buffer) override;
   void ShowFatalError(const char* message);
 
+  // Toggle asynchronous TA-DMA texture upload at runtime (vs. blocking copy).
+  void SetDmaUpload(bool enabled) {
+#if NBA_DC_HAS_KOS
+    use_dma_upload_ = enabled;
+#else
+    (void)enabled;
+#endif
+  }
+
   void ClearScreen();
   void DrawText(int x, int y, std::string_view text);
   void DrawTextCentered(int y, std::string_view text);
