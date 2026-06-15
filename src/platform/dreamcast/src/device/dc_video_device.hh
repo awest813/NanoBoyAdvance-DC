@@ -59,7 +59,9 @@ private:
   static constexpr int kStatusBarY = 448;
   // PVR stride textures must be a multiple of 32 pixels wide.
   static constexpr int kTextureStride = 256;
-  static constexpr int kTextureBytes = kTextureStride * kGBAHeight * static_cast<int>(sizeof(u16));
+  static constexpr int kTextureHeight = 256;
+  static constexpr int kTextureBytes = kTextureStride * kTextureHeight * static_cast<int>(sizeof(u16));
+  static constexpr int kTextureUploadBytes = kTextureStride * kGBAHeight * static_cast<int>(sizeof(u16));
 
 #if NBA_DC_HAS_KOS
   bool InitializePvr();

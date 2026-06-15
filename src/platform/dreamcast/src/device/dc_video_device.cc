@@ -92,7 +92,7 @@ bool DCVideoDevice::InitializePvr() {
     PVR_LIST_OP_POLY,
     texture_format,
     kTextureStride,
-    kGBAHeight,
+    kTextureHeight,
     texture_vram_,
     PVR_FILTER_NEAREST
   );
@@ -101,6 +101,7 @@ bool DCVideoDevice::InitializePvr() {
   context.depth.comparison = PVR_DEPTHCMP_ALWAYS;
   context.depth.write = false;
   context.txr.uv_clamp = PVR_UVCLAMP_UV;
+
   pvr_poly_compile(&poly_hdr_, &context);
   return true;
 }
@@ -135,7 +136,7 @@ void DCVideoDevice::ConvertFrameToTexture(u32* buffer) {
     std::memset(row + kGBAWidth, 0, (kTextureStride - kGBAWidth) * sizeof(u16));
   }
 
-  pvr_txr_load(texture_staging_, texture_vram_, kTextureBytes);
+  pvr_txr_load(texture_staging_, texture_vram_, kTextureUploadBytes);
   frame_ready_ = true;
 }
 
@@ -148,7 +149,7 @@ void DCVideoDevice::UploadRgb565Frame(u16* buffer) {
     std::memset(row + kGBAWidth, 0, (kTextureStride - kGBAWidth) * sizeof(u16));
   }
 
-  pvr_txr_load(texture_staging_, texture_vram_, kTextureBytes);
+  pvr_txr_load(texture_staging_, texture_vram_, kTextureUploadBytes);
   frame_ready_ = true;
 }
 
@@ -170,6 +171,7 @@ void DCVideoDevice::RenderScaledFramePvr() {
   const float right = static_cast<float>(kOffsetX + kGBAWidth * kScale);
   const float bottom = static_cast<float>(kOffsetY + kGBAHeight * kScale);
   const float u_max = static_cast<float>(kGBAWidth) / static_cast<float>(kTextureStride);
+  const float v_max = static_cast<float>(kGBAHeight) / static_cast<float>(kTextureHeight);
   constexpr float z = 1.0f;
 
   alignas(32) pvr_vertex_t vert{};
@@ -195,14 +197,14 @@ void DCVideoDevice::RenderScaledFramePvr() {
   vert.x = left;
   vert.y = bottom;
   vert.u = 0.0f;
-  vert.v = 1.0f;
+  vert.v = v_max;
   pvr_prim(&vert, sizeof(vert));
 
   vert.flags = PVR_CMD_VERTEX_EOL;
   vert.x = right;
   vert.y = bottom;
   vert.u = u_max;
-  vert.v = 1.0f;
+  vert.v = v_max;
   pvr_prim(&vert, sizeof(vert));
 
   pvr_list_finish();
