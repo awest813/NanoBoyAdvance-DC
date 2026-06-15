@@ -118,6 +118,9 @@ Use this as the baseline — do not re-plan solved problems.
 - [x] `RunForDisplayFrame` batches skip + present (`eb5c5580`)
 - [x] Auto frame skip UI + Speed-profile tuning (56/58.5 FPS thresholds)
 - [x] RGB565 conversion via 32K LUT (`dc_video_device`)
+- [x] Clear stride padding once at init instead of per presented frame
+  (padding columns are never sampled: `uv_clamp` + `u_max = 240/256`)
+- [x] Hoist present-quad geometry/UV to compile-time constants (no per-frame divides)
 
 ### Adjacent (feeds GPU budget, not PPU itself)
 

@@ -84,6 +84,12 @@ bool DCVideoDevice::InitializePvr() {
     return false;
   }
 
+  // The staging buffer is wider (kTextureStride) than the GBA frame so PVR's
+  // 32-pixel stride requirement is met. The padding columns (x >= kGBAWidth)
+  // are never sampled (uv_clamp + u_max below clamp UV to kGBAWidth), so we
+  // clear them exactly once here instead of on every presented frame.
+  std::memset(texture_staging_, 0, sizeof(texture_staging_));
+
   pvr_poly_cxt_t context{};
   const int texture_format =
     PVR_TXRFMT_RGB565 | PVR_TXRFMT_NONTWIDDLED | PVR_TXRFMT_X32_STRIDE;
@@ -125,6 +131,8 @@ void DCVideoDevice::ConvertFrameToTexture(u32* buffer) {
 
   const auto& lut = Rgb565Lookup();
 
+  // Stride padding (x >= kGBAWidth) is cleared once in InitializePvr and is
+  // never sampled, so only the visible columns are written per frame.
   for(int y = 0; y < kGBAHeight; y++) {
     u16* row = texture_staging_ + y * kTextureStride;
     const u32* src = buffer + y * kGBAWidth;
@@ -132,8 +140,6 @@ void DCVideoDevice::ConvertFrameToTexture(u32* buffer) {
     for(int x = 0; x < kGBAWidth; x++) {
       row[x] = lut.FromRgb888(src[x]);
     }
-
-    std::memset(row + kGBAWidth, 0, (kTextureStride - kGBAWidth) * sizeof(u16));
   }
 
   pvr_txr_load(texture_staging_, texture_vram_, kTextureUploadBytes);
@@ -143,10 +149,11 @@ void DCVideoDevice::ConvertFrameToTexture(u32* buffer) {
 void DCVideoDevice::UploadRgb565Frame(u16* buffer) {
   NBA_DC_FRAME_TIMING_SCOPE(Conv);
 
+  // Stride padding (x >= kGBAWidth) is cleared once in InitializePvr and is
+  // never sampled, so only the visible columns are copied per frame.
   for(int y = 0; y < kGBAHeight; y++) {
     u16* row = texture_staging_ + y * kTextureStride;
     std::memcpy(row, buffer + y * kGBAWidth, kGBAWidth * sizeof(u16));
-    std::memset(row + kGBAWidth, 0, (kTextureStride - kGBAWidth) * sizeof(u16));
   }
 
   pvr_txr_load(texture_staging_, texture_vram_, kTextureUploadBytes);
@@ -166,12 +173,12 @@ void DCVideoDevice::RenderScaledFramePvr() {
   pvr_txr_set_stride(kTextureStride);
   pvr_prim(&poly_hdr_, sizeof(poly_hdr_));
 
-  const float left = static_cast<float>(kOffsetX);
-  const float top = static_cast<float>(kOffsetY);
-  const float right = static_cast<float>(kOffsetX + kGBAWidth * kScale);
-  const float bottom = static_cast<float>(kOffsetY + kGBAHeight * kScale);
-  const float u_max = static_cast<float>(kGBAWidth) / static_cast<float>(kTextureStride);
-  const float v_max = static_cast<float>(kGBAHeight) / static_cast<float>(kTextureHeight);
+  constexpr float left = static_cast<float>(kOffsetX);
+  constexpr float top = static_cast<float>(kOffsetY);
+  constexpr float right = static_cast<float>(kOffsetX + kGBAWidth * kScale);
+  constexpr float bottom = static_cast<float>(kOffsetY + kGBAHeight * kScale);
+  constexpr float u_max = static_cast<float>(kGBAWidth) / static_cast<float>(kTextureStride);
+  constexpr float v_max = static_cast<float>(kGBAHeight) / static_cast<float>(kTextureHeight);
   constexpr float z = 1.0f;
 
   alignas(32) pvr_vertex_t vert{};
