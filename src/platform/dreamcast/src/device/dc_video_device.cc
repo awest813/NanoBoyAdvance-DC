@@ -13,6 +13,7 @@
 #if NBA_DC_HAS_KOS
 #include <dc/pvr.h>
 #include <dc/video.h>
+#include <kos/cache.h>
 #endif
 
 namespace nba {
@@ -113,6 +114,9 @@ bool DCVideoDevice::InitializePvr() {
 }
 
 void DCVideoDevice::ShutdownPvr() {
+  // Don't free VRAM out from under an in-flight DMA transfer.
+  WaitForUploadDma();
+
   if(texture_vram_) {
     pvr_mem_free(texture_vram_);
     texture_vram_ = nullptr;
@@ -142,7 +146,7 @@ void DCVideoDevice::ConvertFrameToTexture(u32* buffer) {
     }
   }
 
-  pvr_txr_load(texture_staging_, texture_vram_, kTextureUploadBytes);
+  UploadStagingToVram();
   frame_ready_ = true;
 }
 
@@ -156,12 +160,63 @@ void DCVideoDevice::UploadRgb565Frame(u16* buffer) {
     std::memcpy(row, buffer + y * kGBAWidth, kGBAWidth * sizeof(u16));
   }
 
-  pvr_txr_load(texture_staging_, texture_vram_, kTextureUploadBytes);
+  UploadStagingToVram();
   frame_ready_ = true;
+}
+
+void DCVideoDevice::UploadStagingToVram() {
+  if(use_dma_upload_) {
+    // A prior upload should already be finished (Present waits before the next
+    // scene), but guard against rewriting the buffer while a DMA is still live.
+    WaitForUploadDma();
+
+    // The DMA engine reads texture_staging_ straight from main RAM and does not
+    // snoop the SH4 cache, so write back the dirty lines before starting it.
+    dcache_purge_range(
+      reinterpret_cast<uintptr_t>(texture_staging_),
+      kTextureUploadBytes
+    );
+
+    const int started = pvr_txr_load_dma(
+      texture_staging_,
+      texture_vram_,
+      kTextureUploadBytes,
+      /*block=*/false,
+      /*callback=*/nullptr,
+      /*cbdata=*/nullptr
+    );
+    if(started == 0) {
+      upload_dma_in_flight_ = true;
+      return;
+    }
+
+    // Kickoff failed (e.g. a transfer was unexpectedly busy): fall back to the
+    // blocking store-queue copy so the frame still presents correctly.
+  }
+
+  pvr_txr_load(texture_staging_, texture_vram_, kTextureUploadBytes);
+}
+
+void DCVideoDevice::WaitForUploadDma() {
+  if(!upload_dma_in_flight_) {
+    return;
+  }
+
+  // Texture DMA shares the TA bus with vertex submission and the PVR samples the
+  // texture during the render, so the upload must complete before the next scene
+  // begins. pvr_dma_ready() is false while a transfer is active.
+  while(!pvr_dma_ready()) {
+  }
+
+  upload_dma_in_flight_ = false;
 }
 
 void DCVideoDevice::RenderScaledFramePvr() {
   NBA_DC_FRAME_TIMING_SCOPE(Pvr);
+
+  // Make sure this frame's texture has finished uploading before we submit the
+  // scene that samples it (and before the TA is used for vertex submission).
+  WaitForUploadDma();
 
   if(pvr_scene_submitted_) {
     pvr_wait_ready();

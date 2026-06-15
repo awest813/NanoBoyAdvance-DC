@@ -68,6 +68,8 @@ private:
   void ShutdownPvr();
   void ConvertFrameToTexture(u32* buffer);
   void UploadRgb565Frame(u16* buffer);
+  void UploadStagingToVram();
+  void WaitForUploadDma();
   void RenderScaledFramePvr();
   void DrawSoftwareScaled(u32* buffer);
   void DrawSoftwareScaledRgb565(u16* buffer);
@@ -76,6 +78,11 @@ private:
   bool pvr_ready_ = false;
   bool frame_ready_ = false;
   bool pvr_scene_submitted_ = false;
+  // Upload the staging texture to PVR RAM via asynchronous TA DMA so the SH4 is
+  // free during the ~82 KiB copy; falls back to the blocking store-queue copy
+  // automatically if a transfer cannot be started.
+  bool use_dma_upload_ = true;
+  bool upload_dma_in_flight_ = false;
   pvr_ptr_t texture_vram_ = nullptr;
   alignas(32) u16 texture_staging_[kTextureStride * kGBAHeight]{};
   pvr_poly_hdr_t poly_hdr_{};

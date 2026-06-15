@@ -121,6 +121,8 @@ Use this as the baseline — do not re-plan solved problems.
 - [x] Clear stride padding once at init instead of per presented frame
   (padding columns are never sampled: `uv_clamp` + `u_max = 240/256`)
 - [x] Hoist present-quad geometry/UV to compile-time constants (no per-frame divides)
+- [x] Asynchronous TA-DMA texture upload (`pvr_txr_load_dma`, cache-flushed,
+  awaited before scene submit) with automatic blocking-`pvr_txr_load` fallback
 
 ### Adjacent (feeds GPU budget, not PPU itself)
 
@@ -349,8 +351,8 @@ Suggested checkbox granularity:
 - [x] Phase B — RGB565 PPU output + DC draw path
 - [x] Phase C (partial) — BG/sprite scanline batching + merge fast paths (alpha OBJ)
 - [ ] Phase C — affine sprite fast path, SH4 tuning
-- [x] Phase D (partial) — direct RGB565 PVR write, conditional scene wait
-- [ ] Phase D — twiddle eval, double-buffer upload
+- [x] Phase D (partial) — direct RGB565 PVR write, conditional scene wait, async TA-DMA upload
+- [ ] Phase D — twiddle eval, double-buffered texture (overlap upload with present)
 - [x] Phase E (partial) — EF-aware auto skip + EMU ms/display headroom hint
 - [ ] Phase E — catch-up decoupled from skip-draw
 - [ ] Phase F — research items (optional)
