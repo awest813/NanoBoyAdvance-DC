@@ -17,7 +17,14 @@
 
 namespace nba::core {
 
+// Grants the unit-test harness access to the private sprite rasterizers so the
+// fast-path renderer can be compared against the cycle-accurate path. Friend
+// declarations have no runtime/ABI cost in production builds.
+struct PPUTestAccess;
+
 struct PPU {
+  friend struct PPUTestAccess;
+
   PPU(
     Scheduler& scheduler,
     IRQ& irq,

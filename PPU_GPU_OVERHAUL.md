@@ -323,6 +323,11 @@ Toggle: `NBA_DC_FRAME_TIMING=1` or extend **Show FPS** setting.
 
 ### Regression gates
 
+- `nba-sprite-fast-test` (CI: `.github/workflows/ppu-test.yml`) — the fast OBJ
+  scanline rasterizer must stay bit-identical to the cycle-accurate path. Build
+  with `-DNBA_BUILD_TESTS=ON -DPLATFORM_QT=OFF` and run `ctest`. It drives the
+  real PPU via a friend hook and fuzzes affine + non-affine sprites (4bpp/8bpp,
+  1D/2D, double-size, flips, clipping).
 - `scripts/dc-smoke-test.sh` — must pass (functional)
 - `scripts/dc-host-benchmark.sh` — no regression on idle fixtures
 - Manual: 30 s play on each retail benchmark scene after every Phase B–E merge
