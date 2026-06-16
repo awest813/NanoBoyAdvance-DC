@@ -147,6 +147,49 @@ struct PPUTestAccess {
     return ppu.CanUseFastBitmapMerge();
   }
 
+  // ---- Background fast-path testing --------------------------------------
+
+  auto BgColumn(int id) -> std::vector<u32> {
+    std::vector<u32> col(240);
+    for(int x = 0; x < 240; x++) col[x] = ppu.bg.buffer[x][id];
+    return col;
+  }
+
+  // Mode 0 text background: enable a single BG `id` with the given control.
+  void ConfigureTextBg(int id, int vcount, int size, int tile_block, int map_block,
+                      bool full_palette, int bghofs, int bgvofs) {
+    auto& m = ppu.mmio;
+    m.dispcnt.mode = 0;
+    const u16 enable_bits = static_cast<u16>(256U << id);
+    m.dispcnt.hword = enable_bits;
+    m.dispcnt_latch[0] = enable_bits;
+    for(int i = 0; i < 8; i++) m.dispcnt.enable[i] = 0;
+    for(int b = 0; b < 4; b++) m.bgcnt[b].mosaic_enable = 0;
+
+    auto& c = m.bgcnt[id];
+    c.priority = 0; c.tile_block = tile_block; c.map_block = map_block; c.size = size;
+    c.full_palette = full_palette ? 1 : 0; c.mosaic_enable = 0;
+    m.bghofs[id] = bghofs; m.bgvofs[id] = bgvofs;
+
+    m.mosaic.bg.size_x = 1; m.mosaic.bg.size_y = 1; m.mosaic.bg._counter_y = 0;
+    m.vcount = static_cast<u8>(vcount);
+  }
+
+  auto RunBgTextFast(int id) -> std::vector<u32> {
+    std::memset(ppu.bg.buffer, 0, sizeof(ppu.bg.buffer));
+    config->ppu_fast_mode = true;
+    ppu.FastRenderMode0BGScanline(id);
+    return BgColumn(id);
+  }
+
+  auto RunBgTextCycle(int id) -> std::vector<u32> {
+    std::memset(ppu.bg.buffer, 0, sizeof(ppu.bg.buffer));
+    config->ppu_fast_mode = false;
+    ppu.InitBackground();
+    ppu.DrawBackgroundImpl<0>(1232);
+    return BgColumn(id);
+  }
+
   auto RunMerge(bool fast, int vcount) -> std::vector<u32> {
     config->ppu_fast_mode = fast;
     ppu.mmio.vcount = static_cast<u8>(vcount);
