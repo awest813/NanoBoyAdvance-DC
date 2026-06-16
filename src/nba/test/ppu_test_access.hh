@@ -121,6 +121,32 @@ struct PPUTestAccess {
     return ppu.CanUseFastTextMerge(enable_obj);
   }
 
+  // Configure a bitmap-mode (3/4/5) scanline: BG2 only, OBJ disabled, satisfying
+  // CanUseFastBitmapMerge so toggling ppu_fast_mode selects fast vs cycle path.
+  void ConfigureBitmapMerge(int mode) {
+    auto& m = ppu.mmio;
+    m.dispcnt.mode = mode;
+
+    const u16 enable_bits = static_cast<u16>(256U << 2); // BG2 enabled, OBJ off
+    m.dispcnt.hword = enable_bits;       // no bit 7 => not forced blank
+    m.dispcnt_latch[0] = enable_bits;
+    for(int i = 0; i < 8; i++) m.dispcnt.enable[i] = 0; // no windows
+
+    for(int id = 0; id < 4; id++) { m.bgcnt[id].priority = 0; m.bgcnt[id].mosaic_enable = 0; }
+    m.mosaic.bg.size_x = 1; m.mosaic.bg.size_y = 1; m.mosaic.bg._counter_y = 0;
+    m.mosaic.obj.size_x = 1; m.mosaic.obj.size_y = 1; m.mosaic.obj._counter_y = 0;
+
+    m.greenswap = 0;
+    m.bldcnt.sfx = BlendControl::SFX_NONE;
+    for(int l = 0; l < 6; l++) { m.bldcnt.targets[0][l] = 0; m.bldcnt.targets[1][l] = 0; }
+    m.eva = 0; m.evb = 0; m.evy = 0;
+  }
+
+  auto FastBitmapMergeApplies() -> bool {
+    config->ppu_fast_mode = true;
+    return ppu.CanUseFastBitmapMerge();
+  }
+
   auto RunMerge(bool fast, int vcount) -> std::vector<u32> {
     config->ppu_fast_mode = fast;
     ppu.mmio.vcount = static_cast<u8>(vcount);

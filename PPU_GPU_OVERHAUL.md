@@ -323,14 +323,16 @@ Toggle: `NBA_DC_FRAME_TIMING=1` or extend **Show FPS** setting.
 
 ### Regression gates
 
-- `nba-sprite-fast-test` + `nba-merge-fast-test` (CI: `.github/workflows/ppu-test.yml`)
-  — the fast OBJ scanline rasterizer and the fast text-merge path must stay
-  bit-identical to the cycle-accurate paths. Build with
-  `-DNBA_BUILD_TESTS=ON -DPLATFORM_QT=OFF` and run `ctest`. Both drive the real
-  PPU via the `PPUTestAccess` friend hook: the sprite test fuzzes affine +
-  non-affine sprites (4bpp/8bpp, 1D/2D, double-size, flips, clipping); the merge
-  test fuzzes BG layering, BG-vs-OBJ priority, and semi-OBJ alpha blend by
-  running the real `DrawMergeImpl` with `ppu_fast_mode` toggled.
+- `nba-sprite-fast-test` + `nba-merge-fast-test` + `nba-merge-bitmap-test`
+  (CI: `.github/workflows/ppu-test.yml`) — the fast OBJ scanline rasterizer and
+  the fast text/bitmap merge paths must stay bit-identical to the cycle-accurate
+  paths. Build with `-DNBA_BUILD_TESTS=ON -DPLATFORM_QT=OFF` and run `ctest`. All
+  drive the real PPU via the `PPUTestAccess` friend hook: the sprite test fuzzes
+  affine + non-affine sprites (4bpp/8bpp, 1D/2D, double-size, flips, clipping);
+  the text-merge test fuzzes BG layering, BG-vs-OBJ priority, and semi-OBJ alpha
+  blend; the bitmap-merge test fuzzes modes 3/4/5 (backdrop, direct 15-bit
+  color, 256-color palette) — each by running the real `DrawMergeImpl` with
+  `ppu_fast_mode` toggled.
 - `scripts/dc-smoke-test.sh` — must pass (functional)
 - `scripts/dc-host-benchmark.sh` — no regression on idle fixtures
 - Manual: 30 s play on each retail benchmark scene after every Phase B–E merge

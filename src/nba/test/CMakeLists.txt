@@ -12,6 +12,8 @@ endfunction()
 
 add_nba_test(nba-sprite-fast-test sprite_fast_test.cc)
 add_nba_test(nba-merge-fast-test merge_fast_test.cc)
+add_nba_test(nba-merge-bitmap-test merge_bitmap_test.cc)
 
 add_test(NAME ppu-sprite-fast COMMAND nba-sprite-fast-test)
 add_test(NAME ppu-merge-fast COMMAND nba-merge-fast-test)
+add_test(NAME ppu-merge-bitmap COMMAND nba-merge-bitmap-test)
