@@ -5,73 +5,17 @@
 // (PPU::FastDrawSpriteScanlineImpl, used by ppu_fast_mode / Speed profile)
 // against the cycle-accurate path (InitSprite + DrawSpriteImpl).
 //
-// Both paths write PPU::sprite.buffer_wr. For a single sprite per scanline the
-// two must agree exactly on every opaque pixel (color, priority, alpha). We use
-// a single sprite so the test is unaffected by the fast path's deliberate
-// simplification of priority updates on *transparent* overlapping pixels.
-//
-// The harness drives the real PPU code (linked, not copied) via a friend hook.
+// For a single sprite per scanline the two must agree exactly on every opaque
+// pixel (color, priority, alpha). A single sprite avoids the fast path's
+// deliberate simplification of priority updates on transparent overlapping
+// pixels. The harness drives the real PPU code (linked, not copied).
 
-#include <cstdint>
 #include <cstdio>
 #include <cstring>
-#include <memory>
 #include <random>
 #include <vector>
 
-#include <nba/config.hh>
-
-#include "core.hh"
-#include "hw/ppu/ppu.hh"
-
-namespace nba::core {
-
-struct PPUTestAccess {
-  std::shared_ptr<Config> config = std::make_shared<Config>();
-  Core core{config};
-  PPU& ppu = core.ppu;
-
-  struct Pix { int x; unsigned c; unsigned prio; unsigned alpha; };
-
-  auto oam() -> u8* { return ppu.oam; }
-  auto vram() -> u8* { return ppu.vram; }
-
-  void Configure(int mode, bool map1d, bool hblank_oam) {
-    auto& m = ppu.mmio;
-    m.dispcnt.mode = mode;
-    m.dispcnt.oam_mapping_1d = map1d ? 1 : 0;
-    m.dispcnt.hblank_oam_access = hblank_oam ? 1 : 0;
-    for(int i = 0; i < 8; i++) m.dispcnt.enable[i] = 0;
-    m.dispcnt.enable[PPU::LAYER_OBJ] = 1;
-    m.mosaic.obj.size_x = 1; m.mosaic.obj.size_y = 1; m.mosaic.obj._counter_y = 0;
-    m.mosaic.bg.size_x = 1;  m.mosaic.bg.size_y = 1;  m.mosaic.bg._counter_y = 0;
-  }
-
-  auto Collect() -> std::vector<Pix> {
-    std::vector<Pix> out;
-    for(int x = 0; x < 240; x++) {
-      const auto& p = ppu.sprite.buffer_wr[x];
-      if(p.color != 0U) out.push_back({x, p.color, p.priority, p.alpha});
-    }
-    return out;
-  }
-
-  auto RunFast(int vcount) -> std::vector<Pix> {
-    std::memset(ppu.sprite.buffer_wr, 0, sizeof(PPU::Sprite::Pixel) * 240);
-    ppu.FastDrawSpriteScanlineImpl(vcount);
-    return Collect();
-  }
-
-  auto RunCycle(int vcount) -> std::vector<Pix> {
-    // InitSprite sets sprite.vcount = (mmio.vcount + 1) % 228.
-    ppu.mmio.vcount = static_cast<u8>((vcount + 228 - 1) % 228);
-    ppu.InitSprite();
-    ppu.DrawSpriteImpl(static_cast<int>(ppu.sprite.latch_cycle_limit));
-    return Collect();
-  }
-};
-
-} // namespace nba::core
+#include "ppu_test_access.hh"
 
 namespace {
 
@@ -87,7 +31,6 @@ int main() {
   int tested = 0, with_pixels = 0, mismatches = 0;
   int affine_pix = 0, nonaffine_pix = 0;
 
-  // One harness reused across iterations (memory re-randomized each time).
   auto harness = std::make_unique<PPUTestAccess>();
 
   for(int it = 0; it < 200000; it++) {
@@ -100,8 +43,8 @@ int main() {
     const uint ypos = rng() % 160;
     const uint mode = (rng() & 7) == 0 ? 1U : 0U; // OBJ_SEMI(=1) occasionally, else Normal
 
-    u8* oam = harness->oam();
-    u8* vram = harness->vram();
+    u8* oam = harness->Oam();
+    u8* vram = harness->Vram();
     // Disable every OAM entry (rotate/scale off + bit9 set => hidden); then set
     // up only sprite 0. Otherwise zeroed entries are enabled 8x8 sprites at (0,0)
     // and would render on low scanlines. attr3 (matrix) slots stay untouched.
@@ -125,19 +68,18 @@ int main() {
     Wr16(oam, 4, static_cast<u16>(rng() & 0xFFFF)); // attr2 (tile/priority/palette)
 
     if(affine) {
-      // Matrix group 0 lives at OAM offsets 6/14/22/30. Bias toward near-identity
-      // so a good fraction of pixels sample in-bounds (real rotation/scale).
+      // Matrix group 0 at OAM offsets 6/14/22/30, biased near identity.
       Wr16(oam, 6,  static_cast<u16>(static_cast<s16>(128 + static_cast<int>(rng() % 384))));
       Wr16(oam, 14, static_cast<u16>(static_cast<s16>(static_cast<int>(rng() % 256) - 128)));
       Wr16(oam, 22, static_cast<u16>(static_cast<s16>(static_cast<int>(rng() % 256) - 128)));
       Wr16(oam, 30, static_cast<u16>(static_cast<s16>(128 + static_cast<int>(rng() % 384))));
     }
 
-    harness->Configure(/*mode=*/0, map1d, /*hblank_oam=*/rng() & 1);
+    harness->ConfigureSprites(map1d, /*hblank_oam=*/rng() & 1);
     const int vcount = (static_cast<int>(rng() % 80) + static_cast<int>(ypos)) % 160;
 
-    const auto fast = harness->RunFast(vcount);
-    const auto cycle = harness->RunCycle(vcount);
+    const auto fast = harness->RunSpriteFast(vcount);
+    const auto cycle = harness->RunSpriteCycle(vcount);
 
     tested++;
     if(!cycle.empty()) {
