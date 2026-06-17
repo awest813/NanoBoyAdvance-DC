@@ -181,6 +181,14 @@ endif()
 
 # Compiler specific settings
 
+# Clang -flto emits LLVM bitcode objects. When unarr is embedded as a static
+# library and the top-level executable links with GNU ld (common for g++-12 CI),
+# those bitcode archives fail with "file format not recognized".
+set(unarr_enable_lto FALSE)
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+  set(unarr_enable_lto TRUE)
+endif()
+
 if(UNIX
    OR MINGW
    OR MSYS)
@@ -193,9 +201,8 @@ if(UNIX
             -Wmissing-prototypes
             -Werror-implicit-function-declaration
             $<$<CONFIG:Release>:-fomit-frame-pointer>
-            $<$<C_COMPILER_ID:Clang,AppleClang>:
-            -Wno-missing-field-initializers>
-            -flto)
+            $<$<C_COMPILER_ID:Clang,AppleClang>:-Wno-missing-field-initializers>
+            $<$<AND:$<BOOL:${unarr_enable_lto}>,$<C_COMPILER_ID:Clang,AppleClang>>:-flto>)
   if(BUILD_FUZZER)
     target_compile_options(unarr PUBLIC "${sanitize_opts}")
     target_compile_definitions(
@@ -217,7 +224,7 @@ if(UNIX
   endif()
 
   # Clang linker needs -flto too when doing lto
-  if("${CMAKE_C_COMPILER_ID}" MATCHES "Clang")
+  if(unarr_enable_lto AND "${CMAKE_C_COMPILER_ID}" MATCHES "Clang")
     set(linker_opts "${linker_opts} -flto")
   endif()
 
