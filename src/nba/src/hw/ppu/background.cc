@@ -111,9 +111,12 @@ void PPU::FastRenderMode0BGScanline(int id) {
       const u32 tile_address = tile_base + (number << 6) + (real_tile_y << 3) + real_tile_x;
       index = read<u8>(vram, tile_address);
     } else {
+      // 4bpp: one byte holds two pixels (low nibble = even column). Read the
+      // exact byte for this column and pick its nibble; reading a u16 with a
+      // masked address mishandles odd byte offsets and the >>4 high nibble.
       const u32 tile_address = tile_base + (number << 5) + (real_tile_y << 2) + (real_tile_x >> 1);
-      const u16 tile_data = read<u16>(vram, tile_address & ~1U);
-      const u8 nibble = (real_tile_x & 1U) ? static_cast<u8>(tile_data >> 4) : static_cast<u8>(tile_data & 0x0FU);
+      const u8 tile_data = read<u8>(vram, tile_address);
+      const u8 nibble = (real_tile_x & 1U) ? (tile_data >> 4) : (tile_data & 0x0FU);
       index = nibble;
       if(index != 0U) {
         index |= palette << 4;

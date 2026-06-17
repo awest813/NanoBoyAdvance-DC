@@ -13,6 +13,7 @@
 #if NBA_DC_HAS_KOS
 #include <dc/pvr.h>
 #include <dc/video.h>
+#include <kos/cache.h>
 #endif
 
 namespace nba {
@@ -84,6 +85,12 @@ bool DCVideoDevice::InitializePvr() {
     return false;
   }
 
+  // The staging buffer is wider (kTextureStride) than the GBA frame so PVR's
+  // 32-pixel stride requirement is met. The padding columns (x >= kGBAWidth)
+  // are never sampled (uv_clamp + u_max below clamp UV to kGBAWidth), so we
+  // clear them exactly once here instead of on every presented frame.
+  std::memset(texture_staging_, 0, sizeof(texture_staging_));
+
   pvr_poly_cxt_t context{};
   const int texture_format =
     PVR_TXRFMT_RGB565 | PVR_TXRFMT_NONTWIDDLED | PVR_TXRFMT_X32_STRIDE;
@@ -107,6 +114,9 @@ bool DCVideoDevice::InitializePvr() {
 }
 
 void DCVideoDevice::ShutdownPvr() {
+  // Don't free VRAM out from under an in-flight DMA transfer.
+  WaitForUploadDma();
+
   if(texture_vram_) {
     pvr_mem_free(texture_vram_);
     texture_vram_ = nullptr;
@@ -125,6 +135,8 @@ void DCVideoDevice::ConvertFrameToTexture(u32* buffer) {
 
   const auto& lut = Rgb565Lookup();
 
+  // Stride padding (x >= kGBAWidth) is cleared once in InitializePvr and is
+  // never sampled, so only the visible columns are written per frame.
   for(int y = 0; y < kGBAHeight; y++) {
     u16* row = texture_staging_ + y * kTextureStride;
     const u32* src = buffer + y * kGBAWidth;
@@ -132,29 +144,80 @@ void DCVideoDevice::ConvertFrameToTexture(u32* buffer) {
     for(int x = 0; x < kGBAWidth; x++) {
       row[x] = lut.FromRgb888(src[x]);
     }
-
-    std::memset(row + kGBAWidth, 0, (kTextureStride - kGBAWidth) * sizeof(u16));
   }
 
-  pvr_txr_load(texture_staging_, texture_vram_, kTextureUploadBytes);
+  UploadStagingToVram();
   frame_ready_ = true;
 }
 
 void DCVideoDevice::UploadRgb565Frame(u16* buffer) {
   NBA_DC_FRAME_TIMING_SCOPE(Conv);
 
+  // Stride padding (x >= kGBAWidth) is cleared once in InitializePvr and is
+  // never sampled, so only the visible columns are copied per frame.
   for(int y = 0; y < kGBAHeight; y++) {
     u16* row = texture_staging_ + y * kTextureStride;
     std::memcpy(row, buffer + y * kGBAWidth, kGBAWidth * sizeof(u16));
-    std::memset(row + kGBAWidth, 0, (kTextureStride - kGBAWidth) * sizeof(u16));
+  }
+
+  UploadStagingToVram();
+  frame_ready_ = true;
+}
+
+void DCVideoDevice::UploadStagingToVram() {
+  // Never rewrite the staging buffer or VRAM, nor start a store-queue copy,
+  // while a previous DMA is still reading the buffer. Unconditional so toggling
+  // DMA off mid-session cannot leave a transfer racing the blocking path.
+  WaitForUploadDma();
+
+  if(use_dma_upload_) {
+    // The DMA engine reads texture_staging_ straight from main RAM and does not
+    // snoop the SH4 cache, so write back the dirty lines before starting it.
+    dcache_purge_range(
+      reinterpret_cast<uintptr_t>(texture_staging_),
+      kTextureUploadBytes
+    );
+
+    const int started = pvr_txr_load_dma(
+      texture_staging_,
+      texture_vram_,
+      kTextureUploadBytes,
+      /*block=*/false,
+      /*callback=*/nullptr,
+      /*cbdata=*/nullptr
+    );
+    if(started == 0) {
+      upload_dma_in_flight_ = true;
+      return;
+    }
+
+    // Kickoff failed (e.g. a transfer was unexpectedly busy): fall back to the
+    // blocking store-queue copy so the frame still presents correctly.
   }
 
   pvr_txr_load(texture_staging_, texture_vram_, kTextureUploadBytes);
-  frame_ready_ = true;
+}
+
+void DCVideoDevice::WaitForUploadDma() {
+  if(!upload_dma_in_flight_) {
+    return;
+  }
+
+  // Texture DMA shares the TA bus with vertex submission and the PVR samples the
+  // texture during the render, so the upload must complete before the next scene
+  // begins. pvr_dma_ready() is false while a transfer is active.
+  while(!pvr_dma_ready()) {
+  }
+
+  upload_dma_in_flight_ = false;
 }
 
 void DCVideoDevice::RenderScaledFramePvr() {
   NBA_DC_FRAME_TIMING_SCOPE(Pvr);
+
+  // Make sure this frame's texture has finished uploading before we submit the
+  // scene that samples it (and before the TA is used for vertex submission).
+  WaitForUploadDma();
 
   if(pvr_scene_submitted_) {
     pvr_wait_ready();
@@ -166,12 +229,12 @@ void DCVideoDevice::RenderScaledFramePvr() {
   pvr_txr_set_stride(kTextureStride);
   pvr_prim(&poly_hdr_, sizeof(poly_hdr_));
 
-  const float left = static_cast<float>(kOffsetX);
-  const float top = static_cast<float>(kOffsetY);
-  const float right = static_cast<float>(kOffsetX + kGBAWidth * kScale);
-  const float bottom = static_cast<float>(kOffsetY + kGBAHeight * kScale);
-  const float u_max = static_cast<float>(kGBAWidth) / static_cast<float>(kTextureStride);
-  const float v_max = static_cast<float>(kGBAHeight) / static_cast<float>(kTextureHeight);
+  constexpr float left = static_cast<float>(kOffsetX);
+  constexpr float top = static_cast<float>(kOffsetY);
+  constexpr float right = static_cast<float>(kOffsetX + kGBAWidth * kScale);
+  constexpr float bottom = static_cast<float>(kOffsetY + kGBAHeight * kScale);
+  constexpr float u_max = static_cast<float>(kGBAWidth) / static_cast<float>(kTextureStride);
+  constexpr float v_max = static_cast<float>(kGBAHeight) / static_cast<float>(kTextureHeight);
   constexpr float z = 1.0f;
 
   alignas(32) pvr_vertex_t vert{};

@@ -404,6 +404,7 @@ static auto LoadEmulator(
   breadcrumb("Phase 4C: Audio config attached");
   config->video_dev = video_device;
   config->video_rgb565_output = true;
+  video_device->SetDmaUpload(config->pvr_dma_upload);
   config->dc_ppu_timing_callback = [](long long microseconds) {
     DCFrameTiming::Instance().AddPpuMicros(std::chrono::microseconds(microseconds));
   };

@@ -27,6 +27,7 @@ endif()
 
 option(PLATFORM_QT "Build the Qt 6 frontend." ON)
 option(PLATFORM_DREAMCAST "Build the Dreamcast (KallistiOS) frontend." OFF)
+option(NBA_BUILD_TESTS "Build the nba core unit tests." OFF)
 
 if(PLATFORM_DREAMCAST)
   set(PLATFORM_QT OFF)
@@ -36,7 +37,12 @@ endif()
 add_subdirectory(thirdparty)
 
 add_subdirectory(src/nba)
-add_subdirectory(src/platform/core)
+
+# platform-core hosts the shared frontend helpers (and pulls in OpenGL/SDL3 on
+# desktop); only the frontends need it, so a tests-only build can skip it.
+if(PLATFORM_QT OR PLATFORM_DREAMCAST)
+  add_subdirectory(src/platform/core)
+endif()
 
 if(PLATFORM_QT)
   add_subdirectory(src/platform/qt ${CMAKE_CURRENT_BINARY_DIR}/bin/qt/)
@@ -44,4 +50,9 @@ endif()
 
 if(PLATFORM_DREAMCAST)
   add_subdirectory(src/platform/dreamcast ${CMAKE_CURRENT_BINARY_DIR}/bin/dreamcast/)
+endif()
+
+if(NBA_BUILD_TESTS)
+  enable_testing()
+  add_subdirectory(src/nba/test)
 endif()

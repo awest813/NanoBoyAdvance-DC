@@ -1,0 +1,36 @@
+name: PPU Unit Tests
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'src/nba/**'
+      - 'CMakeLists.txt'
+      - '.github/workflows/ppu-test.yml'
+  pull_request:
+    paths:
+      - 'src/nba/**'
+      - 'CMakeLists.txt'
+      - '.github/workflows/ppu-test.yml'
+  workflow_dispatch:
+
+jobs:
+  ppu-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build g++ python3
+      - name: Configure (core unit tests, no frontend)
+        run: |
+          cmake -B build-tests -G Ninja \
+            -DNBA_BUILD_TESTS=ON \
+            -DPLATFORM_QT=OFF \
+            -DPLATFORM_DREAMCAST=OFF \
+            -DCMAKE_BUILD_TYPE=Release
+      - name: Build tests
+        run: cmake --build build-tests -j"$(nproc)"
+      - name: Run tests
+        run: ctest --test-dir build-tests --output-on-failure

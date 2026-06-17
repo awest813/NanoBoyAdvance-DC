@@ -118,6 +118,11 @@ Use this as the baseline — do not re-plan solved problems.
 - [x] `RunForDisplayFrame` batches skip + present (`eb5c5580`)
 - [x] Auto frame skip UI + Speed-profile tuning (56/58.5 FPS thresholds)
 - [x] RGB565 conversion via 32K LUT (`dc_video_device`)
+- [x] Clear stride padding once at init instead of per presented frame
+  (padding columns are never sampled: `uv_clamp` + `u_max = 240/256`)
+- [x] Hoist present-quad geometry/UV to compile-time constants (no per-frame divides)
+- [x] Asynchronous TA-DMA texture upload (`pvr_txr_load_dma`, cache-flushed,
+  awaited before scene submit) with automatic blocking-`pvr_txr_load` fallback
 
 ### Adjacent (feeds GPU budget, not PPU itself)
 
@@ -225,6 +230,22 @@ fall back to cycle stepping when hardware would observe a change.
 **Exit:** `PVR` + `PRESENT` timer sum &lt; 2 ms on retail at 480×320; no tearing vs
 current `vid_waitvbl` behavior.
 
+#### Phase D evaluation outcomes
+
+| Task | Outcome | Rationale |
+|------|---------|-----------|
+| D.1 | **Done (staging + SQ/DMA)** | Per-pixel writes to PVR VRAM are uncached and slow; the staging buffer + `pvr_txr_load` (store queue) / `pvr_txr_load_dma` (TA DMA) is the correct path. Direct mapped write is not a win. |
+| D.2 twiddle | **Evaluated → deferred (likely regression)** | Twiddled textures cannot use stride, so the 240×160 frame would need a 256×256 twiddled surface re-interleaved on the CPU **every frame** (~77 KB bit-twiddle, est. &gt;1 ms on SH4). A single 2× quad is not texture-cache-bound, so the sampling gain cannot pay for the per-frame twiddle cost. Only revisit if profiling shows texture-cache stalls dominate `PVR`. |
+| D.3 | **Done** | Precompiled poly header; conditional `pvr_wait_ready` (only when a scene was submitted). |
+| D.4 | **Skip** | GBA produces full frames; dirty-row tracking costs ~as much as the copy. |
+| D.5 double-buffer | **Evaluated → deferred (marginal, adds latency)** | Async TA-DMA already overlaps the upload with inter-frame work. True double-buffering would only remove the residual `WaitForUploadDma` spin (~80 µs for the 82 KB transfer, &lt;1% of a 16.7 ms frame) and gives **no FPS gain** (vsync-capped / CPU-bound elsewhere), while costing **+1 frame of input latency** and two poly headers. Poor trade for an emulator. Implement behind a default-off flag only if on-hardware profiling shows the spin is significant. |
+| D.6 | **Done** | `DrawSoftwareScaled*` fallbacks retained for `pvr_init` failure. |
+
+**Conclusion:** Phase D's worthwhile wins (staging trim, compile-time present
+geometry, async TA-DMA upload, conditional scene wait) are shipped. Twiddle and
+double-buffer are **deferred with rationale**, not pending work — revisit only if
+retail `PVR`/`PRESENT` segment timers prove a bottleneck.
+
 ### Phase E — Frame pipeline policy (medium payoff, policy risk)
 
 **Goal:** Smarter display/emulated frame relationship.
@@ -302,6 +323,17 @@ Toggle: `NBA_DC_FRAME_TIMING=1` or extend **Show FPS** setting.
 
 ### Regression gates
 
+- PPU fast-path equality tests (CI: `.github/workflows/ppu-test.yml`) — every
+  `ppu_fast_mode` (Speed-profile) rasterizer must stay bit-identical to the
+  cycle-accurate path. Build with `-DNBA_BUILD_TESTS=ON -DPLATFORM_QT=OFF` and
+  run `ctest`. All drive the real PPU via the `PPUTestAccess` friend hook:
+  - `ppu-sprite-fast` — affine + non-affine OBJ (4bpp/8bpp, 1D/2D, double-size, flips, clipping)
+  - `ppu-merge-fast` — text-mode merge: BG layering, BG-vs-OBJ priority, semi-OBJ alpha blend
+  - `ppu-merge-bitmap` — bitmap merge modes 3/4/5 (backdrop, direct color, 256-color)
+  - `ppu-bg-text` — mode-0 text BG: size, scroll, 4bpp/8bpp, screen-block selection
+  - `ppu-bg-affine` — mode-1 affine BG2: size, wraparound, in/out-of-bounds coords
+  - `ppu-bg-bitmap` — bitmap BG modes 3/4/5: frame select, in/out-of-bounds coords
+  - `ppu-bg-advance` — cross-scanline affine reference-point + mosaic-counter advance: the slow inline advance vs `FinishBackgroundScanline` (used by the fast path and frame-skip-suppressed frames) must agree, so affine/Mode-7 stays in sync under Speed/frame skip
 - `scripts/dc-smoke-test.sh` — must pass (functional)
 - `scripts/dc-host-benchmark.sh` — no regression on idle fixtures
 - Manual: 30 s play on each retail benchmark scene after every Phase B–E merge
@@ -345,9 +377,14 @@ Suggested checkbox granularity:
 - [ ] Phase A — retail hardware baselines
 - [x] Phase B — RGB565 PPU output + DC draw path
 - [x] Phase C (partial) — BG/sprite scanline batching + merge fast paths (alpha OBJ)
-- [ ] Phase C — affine sprite fast path, SH4 tuning
-- [x] Phase D (partial) — direct RGB565 PVR write, conditional scene wait
-- [ ] Phase D — twiddle eval, double-buffer upload
+- [x] Phase C — affine/rotated sprite fast-mode scanline path (mirrors cycle math; fuzz-verified bit-identical, 45k pixel cases, 0 mismatches)
+- [x] Phase C — fix fast-path 8bpp 2D-mapped OBJ tile formula (`(base & ~1) + block_x*2`) to match the cycle path (was 18k/82k mismatches)
+- [x] Phase B/C — fix fast text-merge OBJ color read to use the OBJ palette at PRAM `0x200` (`(color | 256) << 1`); was reading the BG palette (caught by `nba-merge-fast-test`: 45k/60k mismatches → 0)
+- [x] Phase C — fix fast mode-0 text BG 4bpp nibble read: was reading a u16 at a masked address and keeping 8 bits of the high nibble, corrupting 6/8 pixels per 4bpp tile; now reads the exact byte (caught by `nba-bg-text-test`: 35k/40k mismatches → 0)
+- [x] Phase C — full fast-path equality test coverage (OBJ, text/bitmap merge, text/affine/bitmap BG) vs cycle-accurate, CI-gated
+- [ ] Phase C — SH4-tuned inner loops (deferred until retail segment timers identify the hot loop — Phase A.2/A.3)
+- [x] Phase D — direct RGB565 PVR write, conditional scene wait, async TA-DMA upload (+ settings toggle)
+- [x] Phase D — twiddle / double-buffer **evaluated → deferred** (see Phase D evaluation outcomes; not beneficial for per-frame full-frame upload)
 - [x] Phase E (partial) — EF-aware auto skip + EMU ms/display headroom hint
 - [ ] Phase E — catch-up decoupled from skip-draw
 - [ ] Phase F — research items (optional)

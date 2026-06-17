@@ -243,7 +243,9 @@ void PPU::FastMergeTextScanlineImpl(int cycles, bool enable_obj) {
       const auto& pixel = sprite.buffer_rd[x];
 
       if(pixel.color != 0U && static_cast<int>(pixel.priority) <= top_bg_priority) {
-        const u16 obj_color = read<u16>(pram, pixel.color << 1);
+        // OBJ palette lives at PRAM 0x200; index with (color | 256), matching
+        // the cycle-accurate merge (colors[0] = pixel.color | 256).
+        const u16 obj_color = read<u16>(pram, (pixel.color | 256U) << 1);
 
         if(pixel.alpha && mmio.bldcnt.targets[1][top_bg_id]) {
           color = Blend(obj_color, color, mmio.eva, mmio.evb);

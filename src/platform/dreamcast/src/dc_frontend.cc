@@ -91,6 +91,15 @@ void AdjustAllowLargeRoms(DreamcastConfig& config, int direction) {
   config.allow_large_roms = !config.allow_large_roms;
 }
 
+auto PvrDmaUploadLabel(DreamcastConfig const& config) -> std::string {
+  return config.pvr_dma_upload ? "DMA" : "Copy";
+}
+
+void AdjustPvrDmaUpload(DreamcastConfig& config, int direction) {
+  (void)direction;
+  config.pvr_dma_upload = !config.pvr_dma_upload;
+}
+
 void AdjustFrameSkip(DreamcastConfig& config, int direction) {
   const int current_index = config.auto_frame_skip ? 0 : config.frame_skip + 1;
   const int next_index = std::clamp(current_index + direction, 0, 4);
@@ -147,6 +156,7 @@ void AdjustStateFolder(DreamcastConfig& config, int direction) {
 static constexpr SettingRow kSettings[] {
   { "Performance", PerformanceLabel, AdjustPerformance },
   { "Show FPS", ShowFpsLabel, AdjustShowFps },
+  { "PVR upload", PvrDmaUploadLabel, AdjustPvrDmaUpload },
   { "Large ROMs (>8 MiB)", AllowLargeRomsLabel, AdjustAllowLargeRoms },
   { "Frame skip", FrameSkipLabel, AdjustFrameSkip },
   { "Audio buffer", AudioBufferLabel, AdjustAudioBuffer },

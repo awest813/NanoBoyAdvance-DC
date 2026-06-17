@@ -16,6 +16,9 @@
 namespace nba::core {
 
 struct Core final : CoreBase {
+  // Lets the PPU unit-test harness reach the fully-wired PPU instance.
+  friend struct PPUTestAccess;
+
   Core(std::shared_ptr<Config> config);
 
   void Reset() override;
