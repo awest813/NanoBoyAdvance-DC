@@ -21,6 +21,7 @@
 #include "device/dc_audio_device.hh"
 #include "device/dc_input.hh"
 #include "open_bios.hh"
+#include "version.hh"
 
 #include <algorithm>
 #include <chrono>
@@ -39,6 +40,28 @@ KOS_INIT_FLAGS(INIT_DEFAULT);
 #endif
 
 using namespace nba;
+
+namespace {
+
+auto BuildBootInfoLine() -> std::string {
+  std::string line = "v";
+  line += VERSION_STRING;
+
+  if(VERSION_GIT_HASH[0] != '\0') {
+    line += " (";
+    line += VERSION_GIT_HASH;
+    line += ')';
+  }
+
+#if NBA_DC_HAS_KOS
+  line += "  |  ";
+  line += HasExtendedRAM() ? "32 MB RAM" : "16 MB RAM";
+#endif
+
+  return line;
+}
+
+} // namespace
 
 auto BIOSLoader::LoadEmbedded(std::unique_ptr<CoreBase>& core) -> Result {
   std::vector<u8> file_data(kOpenBIOS, kOpenBIOS + 16384);
@@ -757,12 +780,7 @@ int main(int argc, char** argv) {
 
   DCUI ui{*video_device};
 
-  // Draw UI first, then do FS operations (which may hang on FlyCast)
-  ui.ClearScreen();
-  ui.DrawTitle("NanoBoyAdvance");
-  ui.DrawTextCentered(120, "Dreamcast Edition");
-  ui.DrawStatusBar("Loading settings...");
-  ui.Present();
+  ui.DrawSplash("Dreamcast Edition", BuildBootInfoLine(), "Loading settings...");
 
   DCInput input;
 
@@ -832,11 +850,7 @@ int main(int argc, char** argv) {
   while(true) {
     std::printf("[NBA-DC] Frontend: scanning ROMs\n");
     std::fflush(stdout);
-    ui.ClearScreen();
-    ui.DrawTitle("NanoBoyAdvance");
-    ui.DrawTextCentered(120, "Loading library...");
-    ui.DrawStatusBar("Scanning /pc/roms, /cd, /cd/gbaDC");
-    ui.Present();
+    ui.DrawSplash("Loading library...", {}, "Scanning /pc/roms, /cd, /cd/gbaDC");
 
     auto entries = ROMBrowser::Scan(*config);
 

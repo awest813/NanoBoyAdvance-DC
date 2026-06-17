@@ -37,6 +37,27 @@ void DCUI::DrawTextMultiline(int x, int y, std::string_view text) {
 
 void DCUI::DrawTitle(std::string_view title) {
   DrawTextCentered(24, title);
+  video_.DrawFilledRect(80, 52, 480, 2, 0x1084);
+}
+
+void DCUI::DrawSplash(
+  std::string_view subtitle,
+  std::string_view version_line,
+  std::string_view status
+) {
+  ClearScreen();
+  DrawTitle("NanoBoyAdvance");
+  DrawTextCentered(120, subtitle);
+
+  if(!version_line.empty()) {
+    DrawTextCentered(152, version_line);
+  }
+
+  if(!status.empty()) {
+    DrawStatusBar(status);
+  }
+
+  Present();
 }
 
 void DCUI::DrawMenu(
@@ -69,8 +90,8 @@ void DCUI::DrawMenu(
     }
 
     const char* prefix = selected ? "> " : "  ";
-    std::string line = std::string{prefix} + items[index];
-    DrawText(48, y, line);
+    std::string line = TruncateText(std::string{prefix} + items[index], kMenuMaxChars);
+    DrawText(kMenuTextX, y, line);
   }
 
   if(item_count == 0) {
@@ -104,7 +125,7 @@ void DCUI::DrawMenu(
 }
 
 void DCUI::DrawStatusBar(std::string_view text) {
-  video_.DrawStatusBar(text);
+  video_.DrawStatusBar(TruncateText(text, kStatusBarMaxChars));
 }
 
 void DCUI::DrawOverlay(std::string_view text) {

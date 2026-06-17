@@ -1,6 +1,13 @@
 # SPDX-FileCopyrightText: Copyright 2026 The NanoBoyAdvance Authors
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+include(${CMAKE_CURRENT_SOURCE_DIR}/../qt/version.cmake)
+
+configure_file(
+  ${CMAKE_CURRENT_SOURCE_DIR}/../qt/version.hh.in
+  ${CMAKE_CURRENT_BINARY_DIR}/version.hh
+)
+
 set(SOURCES
   src/device/dc_video_device.cc
   src/device/dc_audio_device.cc
@@ -33,7 +40,7 @@ set(HEADERS
 add_executable(NanoBoyAdvance-DC)
 
 target_sources(NanoBoyAdvance-DC PRIVATE ${SOURCES} ${HEADERS})
-target_include_directories(NanoBoyAdvance-DC PRIVATE src)
+target_include_directories(NanoBoyAdvance-DC PRIVATE src ${CMAKE_CURRENT_BINARY_DIR})
 target_link_libraries(NanoBoyAdvance-DC PRIVATE platform-core)
 
 if(NOT CMAKE_CROSSCOMPILING)

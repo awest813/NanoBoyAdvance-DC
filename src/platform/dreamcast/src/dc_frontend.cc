@@ -321,9 +321,17 @@ auto DCFrontend::Run(
 
   SyncMenuScrollOffset(selection, scroll_offset);
 
+  char rom_title[32];
+  std::snprintf(
+    rom_title,
+    sizeof(rom_title),
+    "Select ROM (%d)",
+    static_cast<int>(entries.size())
+  );
+
   while(true) {
     ui.DrawMenu(
-      "Select ROM",
+      rom_title,
       menu_items,
       selection,
       scroll_offset,

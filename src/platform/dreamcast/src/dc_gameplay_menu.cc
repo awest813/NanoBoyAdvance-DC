@@ -169,11 +169,6 @@ auto RunCheatMenu(
       }
 
       std::string label = entry->name;
-      if(label.size() > 24) {
-        label.resize(21);
-        label += "...";
-      }
-
       label += entry->enabled ? ": On" : ": Off";
       items.push_back(std::move(label));
     }

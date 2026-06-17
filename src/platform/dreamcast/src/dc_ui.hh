@@ -13,6 +13,24 @@
 namespace nba {
 
 inline constexpr int kMenuVisibleRows = 10;
+inline constexpr int kMenuCharWidth = 8;
+inline constexpr int kMenuTextX = 48;
+inline constexpr int kMenuPositionX = 544;
+inline constexpr int kMenuMaxChars =
+  (kMenuPositionX - kMenuTextX) / kMenuCharWidth;
+inline constexpr int kStatusBarMaxChars = 74;
+
+inline auto TruncateText(std::string_view text, size_t max_chars) -> std::string {
+  if(text.size() <= max_chars) {
+    return std::string{text};
+  }
+
+  if(max_chars <= 3) {
+    return std::string{text.substr(0, max_chars)};
+  }
+
+  return std::string{text.substr(0, max_chars - 3)} + "...";
+}
 
 inline void SyncMenuScrollOffset(
   int selection,
@@ -34,6 +52,11 @@ struct DCUI {
   void DrawTextCentered(int y, std::string_view text);
   void DrawTextMultiline(int x, int y, std::string_view text);
   void DrawTitle(std::string_view title);
+  void DrawSplash(
+    std::string_view subtitle,
+    std::string_view version_line = {},
+    std::string_view status = {}
+  );
   void DrawMenu(
     std::string_view title,
     std::vector<std::string> const& items,
