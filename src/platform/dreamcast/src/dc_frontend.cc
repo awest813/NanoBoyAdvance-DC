@@ -166,14 +166,6 @@ static constexpr SettingRow kSettings[] {
   { "State folder", StateFolderLabel, AdjustStateFolder }
 };
 
-void SyncMenuScrollOffset(int selection, int& scroll_offset, int visible_rows) {
-  if(selection < scroll_offset) {
-    scroll_offset = selection;
-  } else if(selection >= scroll_offset + visible_rows) {
-    scroll_offset = selection - visible_rows + 1;
-  }
-}
-
 auto BuildMenuItems(std::vector<ROMEntry> const& entries) -> std::vector<std::string> {
   std::vector<std::string> items;
   items.reserve(entries.size());
@@ -185,6 +177,17 @@ auto BuildMenuItems(std::vector<ROMEntry> const& entries) -> std::vector<std::st
   return items;
 }
 
+auto BuildRomBrowserStatus(DreamcastConfig const& config) -> std::string {
+  char buffer[96];
+  std::snprintf(
+    buffer,
+    sizeof(buffer),
+    "A=Launch  B=Loader  Y=Settings  |  %s",
+    DreamcastConfig::ProfileName(config.performance_profile)
+  );
+  return buffer;
+}
+
 } // namespace
 
 auto DCSettingsMenu::Run(
@@ -194,6 +197,7 @@ auto DCSettingsMenu::Run(
 ) -> bool {
   DreamcastConfig draft = config;
   int selection = 0;
+  int scroll_offset = 0;
   const int item_count = static_cast<int>(std::size(kSettings));
 
   while(true) {
@@ -205,12 +209,22 @@ auto DCSettingsMenu::Run(
     }
     items.emplace_back("Save and return");
 
+    SyncMenuScrollOffset(selection, scroll_offset);
+
+    char status[96];
+    std::snprintf(
+      status,
+      sizeof(status),
+      "Left/Right=Adjust  A=Save on last row  B=Cancel  |  %s",
+      DreamcastConfig::ProfileName(draft.performance_profile)
+    );
+
     ui.DrawMenu(
       "Settings",
       items,
       selection,
-      0,
-      "Left/Right=Adjust  A=Save on last row  B=Cancel",
+      scroll_offset,
+      status,
       &input
     );
 
@@ -249,6 +263,8 @@ auto DCSettingsMenu::Run(
     } else if(menu.cancel) {
       return false;
     }
+
+    SyncMenuScrollOffset(selection, scroll_offset);
 
 #if NBA_DC_HAS_KOS
     vid_waitvbl();
@@ -322,16 +338,25 @@ auto DCFrontend::Run(
     }
   }
 
-  static constexpr int kVisibleRows = 10;
-  SyncMenuScrollOffset(selection, scroll_offset, kVisibleRows);
+  SyncMenuScrollOffset(selection, scroll_offset);
+
+  char rom_title[32];
+  std::snprintf(
+    rom_title,
+    sizeof(rom_title),
+    "Select ROM (%d)",
+    static_cast<int>(entries.size())
+  );
+
+  auto browser_status = BuildRomBrowserStatus(config);
 
   while(true) {
     ui.DrawMenu(
-      "Select ROM",
+      rom_title,
       menu_items,
       selection,
       scroll_offset,
-      "A=Launch  B=Loader  Y=Settings  Start=Loader",
+      browser_status,
       &input
     );
 
@@ -361,13 +386,14 @@ auto DCFrontend::Run(
       if(DCSettingsMenu::Run(ui, input, config)) {
         return Result{Action::OpenSettings, {}};
       }
+      browser_status = BuildRomBrowserStatus(config);
     } else if(menu.start) {
       return Result{Action::ReturnToLoader, {}};
     } else if(menu.cancel) {
       return Result{Action::ReturnToLoader, {}};
     }
 
-    SyncMenuScrollOffset(selection, scroll_offset, kVisibleRows);
+    SyncMenuScrollOffset(selection, scroll_offset);
 
 #if NBA_DC_HAS_KOS
     vid_waitvbl();

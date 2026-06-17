@@ -13,6 +13,9 @@ if(GIT_FOUND)
 
   string(STRIP "${VERSION_GIT_BRANCH}" VERSION_GIT_BRANCH)
   string(STRIP "${VERSION_GIT_HASH}" VERSION_GIT_HASH)
+else()
+  set(VERSION_GIT_BRANCH "")
+  set(VERSION_GIT_HASH "")
 endif()
 
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/version.hh.in ${CMAKE_CURRENT_BINARY_DIR}/version.hh)
+configure_file(${CMAKE_CURRENT_LIST_DIR}/version.hh.in ${CMAKE_CURRENT_BINARY_DIR}/version.hh)

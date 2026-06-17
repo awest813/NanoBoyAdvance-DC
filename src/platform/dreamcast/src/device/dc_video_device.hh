@@ -51,6 +51,7 @@ struct DCVideoDevice : VideoDevice {
   void DrawText(int x, int y, std::string_view text);
   void DrawTextCentered(int y, std::string_view text);
   void DrawTextMultiline(int x, int y, std::string_view text);
+  void DrawFilledRect(int x, int y, int width, int height, u16 color);
   void DrawStatusBar(std::string_view text);
   void DrawOverlay(std::string_view text);
   void Present();

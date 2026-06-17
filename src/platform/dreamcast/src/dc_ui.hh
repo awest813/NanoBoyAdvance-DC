@@ -12,6 +12,38 @@
 
 namespace nba {
 
+inline constexpr int kMenuVisibleRows = 10;
+inline constexpr int kMenuCharWidth = 8;
+inline constexpr int kMenuTextX = 48;
+inline constexpr int kMenuPositionX = 544;
+inline constexpr int kMenuMaxChars =
+  (kMenuPositionX - kMenuTextX) / kMenuCharWidth;
+inline constexpr int kStatusBarMaxChars = 74;
+
+inline auto TruncateText(std::string_view text, size_t max_chars) -> std::string {
+  if(text.size() <= max_chars) {
+    return std::string{text};
+  }
+
+  if(max_chars <= 3) {
+    return std::string{text.substr(0, max_chars)};
+  }
+
+  return std::string{text.substr(0, max_chars - 3)} + "...";
+}
+
+inline void SyncMenuScrollOffset(
+  int selection,
+  int& scroll_offset,
+  int visible_rows = kMenuVisibleRows
+) {
+  if(selection < scroll_offset) {
+    scroll_offset = selection;
+  } else if(selection >= scroll_offset + visible_rows) {
+    scroll_offset = selection - visible_rows + 1;
+  }
+}
+
 struct DCUI {
   explicit DCUI(DCVideoDevice& video);
 
@@ -20,6 +52,11 @@ struct DCUI {
   void DrawTextCentered(int y, std::string_view text);
   void DrawTextMultiline(int x, int y, std::string_view text);
   void DrawTitle(std::string_view title);
+  void DrawSplash(
+    std::string_view subtitle,
+    std::string_view version_line = {},
+    std::string_view status = {}
+  );
   void DrawMenu(
     std::string_view title,
     std::vector<std::string> const& items,
@@ -31,6 +68,13 @@ struct DCUI {
   void DrawStatusBar(std::string_view text);
   void DrawOverlay(std::string_view text);
   void Present();
+
+  auto ShowBriefBanner(
+    std::string_view title,
+    std::string_view message,
+    DCInput& input,
+    int max_frames = 90
+  ) -> void;
 
   auto ShowMessage(
     std::string_view title,
