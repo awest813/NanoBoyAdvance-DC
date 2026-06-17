@@ -157,7 +157,6 @@ auto RunCheatMenu(
   int selection = 0;
   int scroll_offset = 0;
   const int item_count = static_cast<int>(cheats.size());
-  static constexpr int kVisibleRows = 10;
 
   while(true) {
     std::vector<std::string> items;
@@ -179,6 +178,8 @@ auto RunCheatMenu(
       items.push_back(std::move(label));
     }
     items.emplace_back("Back");
+
+    SyncMenuScrollOffset(selection, scroll_offset);
 
     ui.DrawMenu("Cheats", items, selection, scroll_offset, "A/Left/Right=Toggle  B=Back", &input);
 
@@ -203,11 +204,7 @@ auto RunCheatMenu(
       return;
     }
 
-    if(selection < scroll_offset) {
-      scroll_offset = selection;
-    } else if(selection >= scroll_offset + kVisibleRows) {
-      scroll_offset = selection - kVisibleRows + 1;
-    }
+    SyncMenuScrollOffset(selection, scroll_offset);
 
 #if NBA_DC_HAS_KOS
     vid_waitvbl();
@@ -273,6 +270,7 @@ auto DCGameplayMenu::Run(
   fs::path const& rom_path
 ) -> Action {
   int selection = 0;
+  int scroll_offset = 0;
   std::string status_message;
   int status_frames = 0;
 
@@ -281,7 +279,8 @@ auto DCGameplayMenu::Run(
     const auto status = status_frames > 0
       ? std::string_view{status_message}
       : std::string_view{"A=Select  B=Resume  Left/Right=Adjust slot"};
-    ui.DrawMenu("Paused", items, selection, 0, status, &input);
+    SyncMenuScrollOffset(selection, scroll_offset);
+    ui.DrawMenu("Paused", items, selection, scroll_offset, status, &input);
     if(status_frames > 0) {
       status_frames--;
     }
@@ -374,6 +373,8 @@ auto DCGameplayMenu::Run(
     } else if(menu.cancel) {
       return Action::Resume;
     }
+
+    SyncMenuScrollOffset(selection, scroll_offset);
 
 #if NBA_DC_HAS_KOS
     vid_waitvbl();

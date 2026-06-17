@@ -503,6 +503,41 @@ void DCVideoDevice::DrawTextCentered(int y, std::string_view text) {
   DrawText(x, y, text);
 }
 
+void DCVideoDevice::DrawFilledRect(int x, int y, int width, int height, u16 color) {
+#if NBA_DC_HAS_KOS || NBA_DC_HAS_SDL_MENU
+  const int x0 = std::max(0, x);
+  const int y0 = std::max(0, y);
+  const int x1 = std::min(kScreenWidth, x + width);
+  const int y1 = std::min(kScreenHeight, y + height);
+  if(x0 >= x1 || y0 >= y1) {
+    return;
+  }
+
+#if NBA_DC_HAS_KOS
+  vram_base_ = (u16*)vram_s;
+  if(!vram_base_) {
+    return;
+  }
+#endif
+
+  for(int row = y0; row < y1; row++) {
+    for(int col = x0; col < x1; col++) {
+#if NBA_DC_HAS_KOS
+      vram_base_[row * kScreenWidth + col] = color;
+#else
+      PutPixel(col, row, color);
+#endif
+    }
+  }
+#else
+  (void)x;
+  (void)y;
+  (void)width;
+  (void)height;
+  (void)color;
+#endif
+}
+
 void DCVideoDevice::DrawTextMultiline(int x, int y, std::string_view text) {
   while(!text.empty() && y < kScreenHeight) {
     const auto newline = text.find('\n');

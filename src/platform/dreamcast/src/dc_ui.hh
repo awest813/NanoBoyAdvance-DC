@@ -12,6 +12,20 @@
 
 namespace nba {
 
+inline constexpr int kMenuVisibleRows = 10;
+
+inline void SyncMenuScrollOffset(
+  int selection,
+  int& scroll_offset,
+  int visible_rows = kMenuVisibleRows
+) {
+  if(selection < scroll_offset) {
+    scroll_offset = selection;
+  } else if(selection >= scroll_offset + visible_rows) {
+    scroll_offset = selection - visible_rows + 1;
+  }
+}
+
 struct DCUI {
   explicit DCUI(DCVideoDevice& video);
 

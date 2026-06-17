@@ -4,6 +4,7 @@
 #include "dc_ui.hh"
 
 #include <algorithm>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <string>
@@ -49,17 +50,24 @@ void DCUI::DrawMenu(
   ClearScreen();
   DrawTitle(title);
 
-  static constexpr int kVisibleRows = 10;
   static constexpr int kRowHeight = 24;
   static constexpr int kListTop = 72;
+  static constexpr int kListLeft = 40;
+  static constexpr int kListWidth = 560;
+  static constexpr std::uint16_t kSelectionColor = 0x294A;
 
   const int item_count = static_cast<int>(items.size());
-  const int visible = std::min(item_count - scroll_offset, kVisibleRows);
+  const int visible = std::min(item_count - scroll_offset, kMenuVisibleRows);
 
   for(int row = 0; row < visible; row++) {
     const int index = scroll_offset + row;
     const int y = kListTop + row * kRowHeight;
     const bool selected = index == selection;
+
+    if(selected) {
+      video_.DrawFilledRect(kListLeft, y - 2, kListWidth, kRowHeight, kSelectionColor);
+    }
+
     const char* prefix = selected ? "> " : "  ";
     std::string line = std::string{prefix} + items[index];
     DrawText(48, y, line);
@@ -67,16 +75,25 @@ void DCUI::DrawMenu(
 
   if(item_count == 0) {
     DrawTextCentered(kListTop, "No items found");
-  } else if(item_count > 1) {
-    char position[24];
-    std::snprintf(
-      position,
-      sizeof(position),
-      "%d/%d",
-      std::clamp(selection, 0, item_count - 1) + 1,
-      item_count
-    );
-    DrawText(520, kListTop, position);
+  } else {
+    if(scroll_offset > 0) {
+      DrawText(520, kListTop - 18, "^");
+    }
+    if(scroll_offset + kMenuVisibleRows < item_count) {
+      DrawText(520, kListTop + kMenuVisibleRows * kRowHeight - 6, "v");
+    }
+
+    if(item_count > 1) {
+      char position[24];
+      std::snprintf(
+        position,
+        sizeof(position),
+        "%d/%d",
+        std::clamp(selection, 0, item_count - 1) + 1,
+        item_count
+      );
+      DrawText(544, kListTop, position);
+    }
   }
 
   DrawStatusBar(status);
