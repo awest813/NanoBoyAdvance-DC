@@ -136,6 +136,32 @@ void DCUI::Present() {
   video_.Present();
 }
 
+void DCUI::ShowBriefBanner(
+  std::string_view title,
+  std::string_view message,
+  DCInput& input,
+  int max_frames
+) {
+  ClearScreen();
+  DrawTitle(title);
+  DrawTextCentered(120, message);
+  Present();
+
+  for(int frame = 0; frame < max_frames; frame++) {
+    DCMenuInput menu;
+    input.PollMenu(menu);
+    if(menu.confirm || menu.cancel || menu.start || menu.settings) {
+      break;
+    }
+
+#if NBA_DC_HAS_KOS
+    vid_waitvbl();
+#elif NBA_DC_HAS_SDL_MENU
+    SDL_Delay(16);
+#endif
+  }
+}
+
 void DCUI::ShowMessage(
   std::string_view title,
   std::string_view message,

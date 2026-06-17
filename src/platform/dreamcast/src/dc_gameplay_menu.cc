@@ -238,6 +238,16 @@ auto BuildPauseMenuItems(
   return items;
 }
 
+auto BuildPauseTitle(fs::path const& rom_path) -> std::string {
+  std::string name = rom_path.filename().string();
+  const auto semicolon = name.rfind(';');
+  if(semicolon != std::string::npos) {
+    name.resize(semicolon);
+  }
+
+  return "Paused: " + TruncateText(name, 36);
+}
+
 } // namespace
 
 auto DCGameplayMenu::SaveState(
@@ -268,6 +278,7 @@ auto DCGameplayMenu::Run(
   int scroll_offset = 0;
   std::string status_message;
   int status_frames = 0;
+  const auto pause_title = BuildPauseTitle(rom_path);
 
   while(true) {
     auto items = BuildPauseMenuItems(config, cheats);
@@ -275,7 +286,7 @@ auto DCGameplayMenu::Run(
       ? std::string_view{status_message}
       : std::string_view{"A=Select  B=Resume  Left/Right=Adjust slot"};
     SyncMenuScrollOffset(selection, scroll_offset);
-    ui.DrawMenu("Paused", items, selection, scroll_offset, status, &input);
+    ui.DrawMenu(pause_title, items, selection, scroll_offset, status, &input);
     if(status_frames > 0) {
       status_frames--;
     }

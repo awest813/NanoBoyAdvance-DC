@@ -69,6 +69,13 @@ struct DCUI {
   void DrawOverlay(std::string_view text);
   void Present();
 
+  auto ShowBriefBanner(
+    std::string_view title,
+    std::string_view message,
+    DCInput& input,
+    int max_frames = 90
+  ) -> void;
+
   auto ShowMessage(
     std::string_view title,
     std::string_view message,

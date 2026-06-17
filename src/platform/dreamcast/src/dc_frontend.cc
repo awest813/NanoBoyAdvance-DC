@@ -177,6 +177,17 @@ auto BuildMenuItems(std::vector<ROMEntry> const& entries) -> std::vector<std::st
   return items;
 }
 
+auto BuildRomBrowserStatus(DreamcastConfig const& config) -> std::string {
+  char buffer[96];
+  std::snprintf(
+    buffer,
+    sizeof(buffer),
+    "A=Launch  B=Loader  Y=Settings  |  %s",
+    DreamcastConfig::ProfileName(config.performance_profile)
+  );
+  return buffer;
+}
+
 } // namespace
 
 auto DCSettingsMenu::Run(
@@ -200,12 +211,20 @@ auto DCSettingsMenu::Run(
 
     SyncMenuScrollOffset(selection, scroll_offset);
 
+    char status[96];
+    std::snprintf(
+      status,
+      sizeof(status),
+      "Left/Right=Adjust  A=Save on last row  B=Cancel  |  %s",
+      DreamcastConfig::ProfileName(draft.performance_profile)
+    );
+
     ui.DrawMenu(
       "Settings",
       items,
       selection,
       scroll_offset,
-      "Left/Right=Adjust  A=Save on last row  B=Cancel",
+      status,
       &input
     );
 
@@ -329,13 +348,15 @@ auto DCFrontend::Run(
     static_cast<int>(entries.size())
   );
 
+  auto browser_status = BuildRomBrowserStatus(config);
+
   while(true) {
     ui.DrawMenu(
       rom_title,
       menu_items,
       selection,
       scroll_offset,
-      "A=Launch  B=Loader  Y=Settings  Start=Loader",
+      browser_status,
       &input
     );
 
@@ -365,6 +386,7 @@ auto DCFrontend::Run(
       if(DCSettingsMenu::Run(ui, input, config)) {
         return Result{Action::OpenSettings, {}};
       }
+      browser_status = BuildRomBrowserStatus(config);
     } else if(menu.start) {
       return Result{Action::ReturnToLoader, {}};
     } else if(menu.cancel) {

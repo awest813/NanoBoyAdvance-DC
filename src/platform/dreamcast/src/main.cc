@@ -850,7 +850,15 @@ int main(int argc, char** argv) {
   while(true) {
     std::printf("[NBA-DC] Frontend: scanning ROMs\n");
     std::fflush(stdout);
-    ui.DrawSplash("Loading library...", {}, "Scanning /pc/roms, /cd, /cd/gbaDC");
+
+    char scan_status[80];
+    std::snprintf(
+      scan_status,
+      sizeof(scan_status),
+      "Scanning %s, /cd, /cd/gbaDC",
+      config->rom_folder.c_str()
+    );
+    ui.DrawSplash("Loading library...", {}, scan_status);
 
     auto entries = ROMBrowser::Scan(*config);
 
@@ -860,6 +868,38 @@ int main(int argc, char** argv) {
       entries.size() == 1 ? "" : "s"
     );
     std::fflush(stdout);
+
+    if(!entries.empty()) {
+      const auto rom_count = entries.size();
+      int unavailable = 0;
+      for(auto const& entry : entries) {
+        if(!entry.launchable) {
+          unavailable++;
+        }
+      }
+
+      char banner[64];
+      if(unavailable > 0) {
+        std::snprintf(
+          banner,
+          sizeof(banner),
+          "%zu ROM%s found (%d need Large ROMs)",
+          rom_count,
+          rom_count == 1 ? "" : "s",
+          unavailable
+        );
+      } else {
+        std::snprintf(
+          banner,
+          sizeof(banner),
+          "%zu ROM%s found",
+          rom_count,
+          rom_count == 1 ? "" : "s"
+        );
+      }
+
+      ui.ShowBriefBanner("Library ready", banner, input);
+    }
 
     auto frontend_result = DCFrontend::Run(ui, input, *config, entries);
 
@@ -886,6 +926,7 @@ int main(int argc, char** argv) {
       }
       RunLoadEmulator(ui, input, config, video_device, frontend_result.rom_path);
       config->SaveDreamcastSafe(DreamcastConfig::kDefaultConfigPath);
+      ui.ShowBriefBanner("Session ended", "Returning to ROM browser...", input);
     }
   }
 
