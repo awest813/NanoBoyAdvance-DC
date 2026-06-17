@@ -190,6 +190,80 @@ struct PPUTestAccess {
     return BgColumn(id);
   }
 
+  // Mode-1 affine BG2. Identity matrix (required by the fast path); map_block /
+  // tile_block 0 keep all in-bounds fetches below 0x10000. bg.affine[0] is set
+  // directly so the fast and cycle paths start from the same coordinate.
+  void ConfigureAffineBg(int size, bool wraparound) {
+    auto& m = ppu.mmio;
+    m.dispcnt.mode = 1;
+    const u16 enable_bits = static_cast<u16>(256U << 2); // BG2 only
+    m.dispcnt.hword = enable_bits;
+    m.dispcnt_latch[0] = enable_bits;
+    for(int i = 0; i < 8; i++) m.dispcnt.enable[i] = 0;
+    for(int b = 0; b < 4; b++) m.bgcnt[b].mosaic_enable = 0;
+
+    auto& c = m.bgcnt[2];
+    c.priority = 0; c.tile_block = 0; c.map_block = 0; c.size = size;
+    c.mosaic_enable = 0; c.wraparound = wraparound ? 1 : 0;
+
+    m.bgpa[0] = 0x100; m.bgpb[0] = 0; m.bgpc[0] = 0; m.bgpd[0] = 0x100;
+    m.mosaic.bg.size_x = 1; m.mosaic.bg.size_y = 1; m.mosaic.bg._counter_y = 0;
+    m.vcount = 0;
+  }
+
+  auto RunBgAffineFast(s32 ax, s32 ay) -> std::vector<u32> {
+    std::memset(ppu.bg.buffer, 0, sizeof(ppu.bg.buffer));
+    ppu.bg.affine[0].x = ax; ppu.bg.affine[0].y = ay;
+    config->ppu_fast_mode = true;
+    ppu.FastRenderMode2BGScanline(0);
+    return BgColumn(2);
+  }
+
+  auto RunBgAffineCycle(s32 ax, s32 ay) -> std::vector<u32> {
+    std::memset(ppu.bg.buffer, 0, sizeof(ppu.bg.buffer));
+    ppu.bg.cycle = 0;
+    ppu.bg.affine[0].x = ax; ppu.bg.affine[0].y = ay;
+    config->ppu_fast_mode = false;
+    ppu.DrawBackgroundImpl<1>(1232);
+    return BgColumn(2);
+  }
+
+  // Bitmap BG (modes 3/4/5). Identity matrix; bg.affine[0] set directly.
+  void ConfigureBitmapBg(int mode, int frame) {
+    auto& m = ppu.mmio;
+    m.dispcnt.mode = mode;
+    m.dispcnt.frame = frame;
+    const u16 enable_bits = static_cast<u16>(256U << 2); // BG2
+    m.dispcnt.hword = enable_bits;
+    m.dispcnt_latch[0] = enable_bits;
+    for(int i = 0; i < 8; i++) m.dispcnt.enable[i] = 0;
+    for(int b = 0; b < 4; b++) m.bgcnt[b].mosaic_enable = 0;
+    m.bgpa[0] = 0x100; m.bgpb[0] = 0; m.bgpc[0] = 0; m.bgpd[0] = 0x100;
+    m.mosaic.bg.size_x = 1; m.mosaic.bg.size_y = 1; m.mosaic.bg._counter_y = 0;
+    m.vcount = 0;
+  }
+
+  auto RunBgBitmapFast(int mode, s32 ax, s32 ay) -> std::vector<u32> {
+    std::memset(ppu.bg.buffer, 0, sizeof(ppu.bg.buffer));
+    ppu.bg.affine[0].x = ax; ppu.bg.affine[0].y = ay;
+    config->ppu_fast_mode = true;
+    if(mode == 3) ppu.FastRenderMode3BGScanline();
+    else if(mode == 4) ppu.FastRenderMode4BGScanline();
+    else ppu.FastRenderMode5BGScanline();
+    return BgColumn(2);
+  }
+
+  auto RunBgBitmapCycle(int mode, s32 ax, s32 ay) -> std::vector<u32> {
+    std::memset(ppu.bg.buffer, 0, sizeof(ppu.bg.buffer));
+    ppu.bg.cycle = 0;
+    ppu.bg.affine[0].x = ax; ppu.bg.affine[0].y = ay;
+    config->ppu_fast_mode = false;
+    if(mode == 3) ppu.DrawBackgroundImpl<3>(1232);
+    else if(mode == 4) ppu.DrawBackgroundImpl<4>(1232);
+    else ppu.DrawBackgroundImpl<5>(1232);
+    return BgColumn(2);
+  }
+
   auto RunMerge(bool fast, int vcount) -> std::vector<u32> {
     config->ppu_fast_mode = fast;
     ppu.mmio.vcount = static_cast<u8>(vcount);

@@ -323,17 +323,16 @@ Toggle: `NBA_DC_FRAME_TIMING=1` or extend **Show FPS** setting.
 
 ### Regression gates
 
-- `nba-sprite-fast-test` + `nba-merge-fast-test` + `nba-merge-bitmap-test` +
-  `nba-bg-text-test` (CI: `.github/workflows/ppu-test.yml`) — the fast OBJ
-  scanline rasterizer, the fast text/bitmap merge paths, and the fast mode-0
-  text background must stay bit-identical to the cycle-accurate paths. Build with
-  `-DNBA_BUILD_TESTS=ON -DPLATFORM_QT=OFF` and run `ctest`. All drive the real
-  PPU via the `PPUTestAccess` friend hook: the sprite test fuzzes affine +
-  non-affine sprites (4bpp/8bpp, 1D/2D, double-size, flips, clipping); the
-  text-merge test fuzzes BG layering, BG-vs-OBJ priority, and semi-OBJ alpha
-  blend; the bitmap-merge test fuzzes modes 3/4/5 (backdrop, direct 15-bit color,
-  256-color palette); the bg-text test fuzzes screen size, scroll, 4bpp/8bpp,
-  and screen-block selection vs `DrawBackgroundImpl<0>`.
+- PPU fast-path equality tests (CI: `.github/workflows/ppu-test.yml`) — every
+  `ppu_fast_mode` (Speed-profile) rasterizer must stay bit-identical to the
+  cycle-accurate path. Build with `-DNBA_BUILD_TESTS=ON -DPLATFORM_QT=OFF` and
+  run `ctest`. All drive the real PPU via the `PPUTestAccess` friend hook:
+  - `ppu-sprite-fast` — affine + non-affine OBJ (4bpp/8bpp, 1D/2D, double-size, flips, clipping)
+  - `ppu-merge-fast` — text-mode merge: BG layering, BG-vs-OBJ priority, semi-OBJ alpha blend
+  - `ppu-merge-bitmap` — bitmap merge modes 3/4/5 (backdrop, direct color, 256-color)
+  - `ppu-bg-text` — mode-0 text BG: size, scroll, 4bpp/8bpp, screen-block selection
+  - `ppu-bg-affine` — mode-1 affine BG2: size, wraparound, in/out-of-bounds coords
+  - `ppu-bg-bitmap` — bitmap BG modes 3/4/5: frame select, in/out-of-bounds coords
 - `scripts/dc-smoke-test.sh` — must pass (functional)
 - `scripts/dc-host-benchmark.sh` — no regression on idle fixtures
 - Manual: 30 s play on each retail benchmark scene after every Phase B–E merge
@@ -381,6 +380,7 @@ Suggested checkbox granularity:
 - [x] Phase C — fix fast-path 8bpp 2D-mapped OBJ tile formula (`(base & ~1) + block_x*2`) to match the cycle path (was 18k/82k mismatches)
 - [x] Phase B/C — fix fast text-merge OBJ color read to use the OBJ palette at PRAM `0x200` (`(color | 256) << 1`); was reading the BG palette (caught by `nba-merge-fast-test`: 45k/60k mismatches → 0)
 - [x] Phase C — fix fast mode-0 text BG 4bpp nibble read: was reading a u16 at a masked address and keeping 8 bits of the high nibble, corrupting 6/8 pixels per 4bpp tile; now reads the exact byte (caught by `nba-bg-text-test`: 35k/40k mismatches → 0)
+- [x] Phase C — full fast-path equality test coverage (OBJ, text/bitmap merge, text/affine/bitmap BG) vs cycle-accurate, CI-gated
 - [ ] Phase C — SH4-tuned inner loops (deferred until retail segment timers identify the hot loop — Phase A.2/A.3)
 - [x] Phase D — direct RGB565 PVR write, conditional scene wait, async TA-DMA upload (+ settings toggle)
 - [x] Phase D — twiddle / double-buffer **evaluated → deferred** (see Phase D evaluation outcomes; not beneficial for per-frame full-frame upload)
