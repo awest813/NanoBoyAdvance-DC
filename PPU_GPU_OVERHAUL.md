@@ -333,6 +333,7 @@ Toggle: `NBA_DC_FRAME_TIMING=1` or extend **Show FPS** setting.
   - `ppu-bg-text` — mode-0 text BG: size, scroll, 4bpp/8bpp, screen-block selection
   - `ppu-bg-affine` — mode-1 affine BG2: size, wraparound, in/out-of-bounds coords
   - `ppu-bg-bitmap` — bitmap BG modes 3/4/5: frame select, in/out-of-bounds coords
+  - `ppu-bg-advance` — cross-scanline affine reference-point + mosaic-counter advance: the slow inline advance vs `FinishBackgroundScanline` (used by the fast path and frame-skip-suppressed frames) must agree, so affine/Mode-7 stays in sync under Speed/frame skip
 - `scripts/dc-smoke-test.sh` — must pass (functional)
 - `scripts/dc-host-benchmark.sh` — no regression on idle fixtures
 - Manual: 30 s play on each retail benchmark scene after every Phase B–E merge

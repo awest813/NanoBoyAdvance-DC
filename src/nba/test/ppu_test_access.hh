@@ -264,6 +264,60 @@ struct PPUTestAccess {
     return BgColumn(2);
   }
 
+  // ---- Cross-scanline affine reference-point advance --------------------
+
+  struct AffineState { s32 bx0, by0, bx1, by1; int counter_y; };
+
+  void SetupAffineAdvance(int mode, bool mosaic2, bool mosaic3, int size_y,
+                          s16 pb0, s16 pd0, s16 pb1, s16 pd1,
+                          s32 bx0, s32 by0, s32 bx1, s32 by1,
+                          int counter_y, int vcount) {
+    auto& m = ppu.mmio;
+    m.dispcnt.mode = mode;
+    u16 en = static_cast<u16>(256U << 2);
+    if(mode == 2) en |= static_cast<u16>(256U << 3);
+    m.dispcnt.hword = en;
+    m.dispcnt_latch[0] = en;
+    for(int i = 0; i < 8; i++) m.dispcnt.enable[i] = 0;
+    for(int b = 0; b < 4; b++) m.bgcnt[b].mosaic_enable = 0;
+    m.bgcnt[2].mosaic_enable = mosaic2 ? 1 : 0;
+    m.bgcnt[3].mosaic_enable = mosaic3 ? 1 : 0;
+
+    m.mosaic.bg.size_x = 1; m.mosaic.bg.size_y = size_y; m.mosaic.bg._counter_y = counter_y;
+    m.bgpa[0] = 0x100; m.bgpc[0] = 0; m.bgpb[0] = pb0; m.bgpd[0] = pd0;
+    m.bgpa[1] = 0x100; m.bgpc[1] = 0; m.bgpb[1] = pb1; m.bgpd[1] = pd1;
+    m.bgx[0]._current = bx0; m.bgy[0]._current = by0;
+    m.bgx[1]._current = bx1; m.bgy[1]._current = by1;
+    m.vcount = static_cast<u8>(vcount);
+
+    ppu.bg.affine[0].x = bx0; ppu.bg.affine[0].y = by0;
+    ppu.bg.affine[1].x = bx1; ppu.bg.affine[1].y = by1;
+  }
+
+  auto CaptureAffine() -> AffineState {
+    auto& m = ppu.mmio;
+    return {m.bgx[0]._current, m.bgy[0]._current, m.bgx[1]._current, m.bgy[1]._current,
+            m.mosaic.bg._counter_y};
+  }
+
+  // The slow renderer advances the affine reference points inline at cycle 1232.
+  void RunSlowAdvance(int mode) {
+    ppu.bg.cycle = 0;
+    config->ppu_fast_mode = false;
+    switch(mode) {
+      case 1: ppu.DrawBackgroundImpl<1>(1232); break;
+      case 2: ppu.DrawBackgroundImpl<2>(1232); break;
+      case 3: ppu.DrawBackgroundImpl<3>(1232); break;
+      case 4: ppu.DrawBackgroundImpl<4>(1232); break;
+      default: ppu.DrawBackgroundImpl<5>(1232); break;
+    }
+  }
+
+  // The fast path and the frame-skip-suppressed path both advance via this.
+  void RunFinishAdvance(int mode) {
+    ppu.FinishBackgroundScanline(mode, 1232);
+  }
+
   auto RunMerge(bool fast, int vcount) -> std::vector<u32> {
     config->ppu_fast_mode = fast;
     ppu.mmio.vcount = static_cast<u8>(vcount);
