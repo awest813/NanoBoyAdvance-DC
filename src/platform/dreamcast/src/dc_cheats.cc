@@ -264,6 +264,55 @@ auto DCCheatDatabase::ProcessGameSharkV1(Entry const& entry, CoreBase& core) -> 
         break;
       }
 
+      case 0x4:
+        if(core.PeekWord(address) == value) {
+          i += 2;
+        }
+        break;
+
+      case 0x5:
+        if(core.PeekWord(address) != value) {
+          i += 2;
+        }
+        break;
+
+      case 0x6:
+        if(core.PeekHalf(address) == static_cast<u16>(value & 0xFFFF)) {
+          i += 2;
+        }
+        break;
+
+      case 0x7:
+        if(core.PeekHalf(address) != static_cast<u16>(value & 0xFFFF)) {
+          i += 2;
+        }
+        break;
+
+      case 0x8:
+        if(core.PeekByte(address) == static_cast<u8>(value & 0xFF)) {
+          i += 2;
+        }
+        break;
+
+      case 0x9:
+        if(core.PeekByte(address) != static_cast<u8>(value & 0xFF)) {
+          i += 2;
+        }
+        break;
+
+      case 0xA: {
+        const u32 count = value & 0xFFFF;
+        for(u32 index = 0; index < count; index++) {
+          if(i + 3 >= entry.codes.size()) {
+            return;
+          }
+
+          core.PokeWord(entry.codes[i + 2], entry.codes[i + 3]);
+          i += 2;
+        }
+        break;
+      }
+
       case 0xD:
         if(core.PeekHalf(address) != static_cast<u16>(value & 0xFFFF)) {
           i += 2;

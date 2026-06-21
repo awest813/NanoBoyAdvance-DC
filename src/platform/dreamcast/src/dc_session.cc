@@ -54,6 +54,11 @@ auto RunGameSession(
   std::shared_ptr<DCVideoDevice>& video_device,
   fs::path const& rom_path
 ) -> bool {
+  if(!config || !video_device) {
+    DCLog("[NBA-DC] RunGameSession: null config or video device\n");
+    return false;
+  }
+
   const auto bios_path = config->bios_path;
 
   auto breadcrumb = [&](const char* phase, std::string const& detail = {}) {
@@ -425,7 +430,9 @@ auto RunGameSession(
 #endif
 
 #if NBA_DC_HAS_KOS
-    snd_stream_poll(SND_STREAM_INVALID);
+    if(audio_device && audio_device->IsOpened()) {
+      snd_stream_poll(SND_STREAM_INVALID);
+    }
 
     video_device->Present();
 

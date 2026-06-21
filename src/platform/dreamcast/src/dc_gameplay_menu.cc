@@ -156,7 +156,9 @@ auto RunCheatMenu(
 
   while(true) {
     std::vector<std::string> items;
+    std::vector<int> index_map;
     items.reserve(item_count + 1);
+    index_map.reserve(item_count);
 
     for(int i = 0; i < item_count; i++) {
       auto const* entry = cheats.GetEntry(i);
@@ -167,8 +169,10 @@ auto RunCheatMenu(
       std::string label = entry->name;
       label += entry->enabled ? ": On" : ": Off";
       items.push_back(std::move(label));
+      index_map.push_back(i);
     }
     items.emplace_back("Back");
+    const int display_count = static_cast<int>(index_map.size());
 
     SyncMenuScrollOffset(selection, scroll_offset);
 
@@ -177,20 +181,21 @@ auto RunCheatMenu(
     DCMenuInput menu;
     input.PollMenu(menu);
 
+    const int wrap_count = display_count + 1;
     if(menu.up) {
-      selection = (selection + item_count) % (item_count + 1);
+      selection = (selection + wrap_count - 1) % wrap_count;
     } else if(menu.down) {
-      selection = (selection + 1) % (item_count + 1);
+      selection = (selection + 1) % wrap_count;
     } else if(menu.left || menu.right) {
-      if(selection < item_count) {
-        cheats.Toggle(selection);
+      if(selection < display_count) {
+        cheats.Toggle(index_map[selection]);
       }
     } else if(menu.confirm) {
-      if(selection == item_count) {
+      if(selection == display_count) {
         return;
       }
 
-      cheats.Toggle(selection);
+      cheats.Toggle(index_map[selection]);
     } else if(menu.cancel) {
       return;
     }

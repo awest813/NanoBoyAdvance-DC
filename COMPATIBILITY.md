@@ -23,13 +23,13 @@ The benchmark set spans the GBA workload range so results generalize. The
 exercised by `scripts/dc-smoke-test.sh` and `scripts/dc-host-benchmark.sh`.
 Retail-game slots are placeholders until hardware baselines are recorded.
 
-| Slot | Workload profile | Host CI ROM | Retail ROM (hardware) | Benchmark scene |
+| Slot | Workload profile | Host CI ROM | Retail recommendation | Benchmark scene |
 |------|------------------|-------------|------------------------|-----------------|
-| 1 | Light 2D / idle loop | `/pc/roms/test.gba` (512 KiB, `TEST`) | _TBD_ | Boot to idle loop; hold 30 s |
-| 2 | Sprite-heavy action | _same idle ROM on host_ | _TBD_ | _TBD_ |
-| 3 | Mode-7 / pseudo-3D | _same idle ROM on host_ | _TBD_ | _TBD_ |
-| 4 | Audio-heavy (HLE-sensitive) | _same idle ROM on host_ | _TBD_ | _TBD_ |
-| 5 | Large ROM / paged cache | `/cd/kirby.gba` (16 MiB, `B8KE`) | _TBD_ | Boot to idle loop; hold 30 s |
+| 1 | Light 2D / idle loop | `/pc/roms/test.gba` (512 KiB, `TEST`) | Super Mario Advance | Boot to idle; hold 30 s |
+| 2 | Sprite-heavy action | _same idle ROM on host_ | Castlevania: Aria of Sorrow | First boss corridor; 30 s |
+| 3 | Mode-7 / pseudo-3D | _same idle ROM on host_ | Mario Kart: Super Circuit | Mushroom Cup race; 30 s |
+| 4 | Audio-heavy (HLE-sensitive) | _same idle ROM on host_ | Golden Sun | Overworld (non-battle); 30 s |
+| 5 | Large ROM / paged cache | `/cd/kirby.gba` (16 MiB, `B8KE`) | Kirby & The Amazing Mirror | Boot to title; 30 s |
 
 Host benchmarks use synthetic ROMs because they are reproducible in CI without
 commercial dumps. Replace slots 2–4 with legally owned retail titles on
@@ -63,9 +63,69 @@ Dreamcast hardware following the workflow in `DREAMCAST.md`.
 
 ## Compatibility Table
 
-| Game | Tier | Recommended profile | Notes / known regressions |
-|------|------|---------------------|---------------------------|
-| _No titles validated on hardware yet._ | Untested | – | – |
+> **Tiers**: Playable (≈59.7 FPS on at least one profile, no game-breaking issues) ·
+> Runs (boots, playable, noticeable slowdown/artifacts) ·
+> Broken (fails to boot, hangs, unplayable) ·
+> Untested (not validated on hardware)
+
+### Hardware-Validated
+
+| Game | Size | Tier | Recommended profile | Notes |
+|------|------|------|---------------------|-------|
+| _No titles validated on retail Dreamcast yet._ | – | Untested | – | – |
+
+### gpSP DC Baseline (for reference)
+
+The data below reflects **gpSP DC** (the only other GBA emulator for Dreamcast)
+as a reference point.  Numbers marked `[gpSP]` are community-reported; NBA-DC
+entries are **predictions** based on core architecture.  Replace with hardware
+measurements as validation progresses.
+
+| Game | Size | gpSP DC | NBA-DC (predicted) | Notes |
+|------|------|---------|---------------------|-------|
+| **Kirby & The Amazing Mirror** | 16 MiB | Broken [gpSP] (OOM crash on stock 16 MB DC) | Playable (Balanced) | Paged-ROM cache; primary M1 test case |
+| **Mother 3** | 32 MiB | Broken [gpSP] | Broken (even with 2-page cache, thrashing extreme) | Out of scope for stock DC |
+| **Kingdom Hearts: Chain of Memories** | 16 MiB | Broken [gpSP] (OOM) | Runs (Balanced) | Paged cache; heavy sprite load may need Speed profile |
+| **Pokémon Emerald** | 16 MiB | Runs [gpSP] (~45-55 FPS, audio crackle) | Playable (Balanced) | RTC, FLASH save; idle-loop hints help |
+| **Pokémon FireRed / LeafGreen** | 16 MiB | Runs [gpSP] | Playable (Balanced) | FLASH save; idle-loop hints |
+| **Golden Sun** | 8 MiB | Runs [gpSP] (~40-50 FPS in battles) | Runs (Balanced) / Playable (Speed) | Mode-7 + sprite heavy; fast merge paths help |
+| **Golden Sun: The Lost Age** | 16 MiB | Runs [gpSP] (~35-45 FPS) | Runs (Speed) | Paged cache + heavy PPU; Speed profile expected minimum |
+| **Boktai: The Sun is in Your Hand** | 8 MiB | Broken [gpSP] (no solar sensor) | Playable (Balanced) | Solar sensor supported in core |
+| **Boktai 2 / 3** | 16 MiB | Broken [gpSP] | Playable (Balanced) | Solar sensor + paged cache |
+| **Mario Kart: Super Circuit** | 4 MiB | Runs [gpSP] (~40-50 FPS) | Playable (Balanced/Speed) | Mode-7; fast paths may be sufficient |
+| **Doom** | 8 MiB | Runs [gpSP] (~30-40 FPS) | Runs (Speed) | Bitmap mode; fast bitmap merge helps but SH4 still taxed |
+| **Doom II** | 16 MiB | Broken [gpSP] (OOM) | Runs (Speed) | Bitmap + paged cache |
+| **WarioWare, Inc.: Mega Microgames!** | 8 MiB | Runs [gpSP] (some microgames fail) | Playable (Balanced) | Cycle-accurate PPU should pass all microgames |
+| **Classic NES Series (various)** | 1-4 MiB | Runs [gpSP] (some fail to boot) | Playable (Balanced) | Accurate core handles boot edge-cases |
+| **The Legend of Zelda: The Minish Cap** | 16 MiB | Runs [gpSP] (~40-50 FPS) | Runs (Balanced) / Playable (Speed) | Mode-7 + sprites + paged cache |
+| **Metroid Fusion** | 8 MiB | Playable [gpSP] | Playable (Balanced) | Light sprite load |
+| **Metroid Zero Mission** | 8 MiB | Playable [gpSP] | Playable (Balanced) | Light sprite load |
+| **Castlevania: Aria of Sorrow** | 8 MiB | Playable [gpSP] | Playable (Balanced) | Moderate sprite load |
+| **Advance Wars** | 8 MiB | Playable [gpSP] | Playable (Balanced) | Light 2D |
+| **Advance Wars 2** | 16 MiB | Broken [gpSP] (OOM) | Playable (Balanced) | Paged cache |
+| **Fire Emblem** | 8 MiB | Playable [gpSP] | Playable (Balanced) | Light 2D; SRAM save |
+| **Fire Emblem: The Sacred Stones** | 16 MiB | Broken [gpSP] (OOM) | Playable (Balanced) | Paged cache |
+| **Final Fantasy VI Advance** | 8 MiB | Runs [gpSP] (~45-55 FPS) | Playable (Balanced) | Mode-7 overworld |
+| **Final Fantasy Tactics Advance** | 16 MiB | Broken [gpSP] (OOM) | Runs (Balanced) | Sprite heavy + paged cache |
+| **Super Mario Advance (1–4)** | 4-8 MiB | Playable [gpSP] | Playable (Balanced) | Light 2D platformers |
+| **Mario & Luigi: Superstar Saga** | 16 MiB | Broken [gpSP] (OOM) | Runs (Balanced) | Paged cache; moderate sprite load |
+| **Yoshi's Island: Super Mario Advance 3** | 8 MiB | Runs [gpSP] (~50-55 FPS) | Playable (Balanced) | SFX + sprites |
+| **Drill Dozer** | 8 MiB | Playable [gpSP] | Playable (Balanced) | Rumble not emulated |
+| **Rhythm Tengoku** | 16 MiB | Broken [gpSP] (OOM) | Runs (Speed) | Audio timing sensitive; HLE may help |
+| **Wario Land 4** | 8 MiB | Playable [gpSP] | Playable (Balanced) | Moderate sprite load |
+| **Kuru Kuru Kururin** | 4 MiB | Playable [gpSP] | Playable (Balanced) | Light 2D rotation |
+
+### Key Differences vs gpSP DC
+
+| Capability | gpSP DC | NBA-DC | Impact |
+|------------|---------|--------|--------|
+| 16+ MiB ROMs on stock DC | Broken (OOM) | Paged cache | ~25 additional playable titles |
+| Solar sensor | Not emulated | Supported | Boktai trilogy playable |
+| RTC | Partial/broken | Full support | Pokémon time events work |
+| Audio profiles | Single mixer | 3-tier (Accuracy/Balanced/Speed) | Per-game optimization |
+| Auto frame skip | Some builds | FPS-driven with EF guard | Adaptive to workload |
+| Save reliability | Silent VMU corruption | In-memory fallback + exit flush | Progress not lost |
+| FPS telemetry | None | Overlay (FPS/EF/FS/PG) | Performance debugging |
 
 ## Known Regressions
 

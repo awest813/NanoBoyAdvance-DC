@@ -51,13 +51,21 @@ inline auto EnsureDirectory(fs::path const& path) -> bool {
 // POSIX mkdir-based directory creator for Dreamcast virtual paths where
 // std::filesystem may not work correctly through KOS filesystem drivers.
 // Returns true if the directory exists or was created successfully.
+// Creates intermediate parent directories as needed (e.g., /pc/saves/foo/bar).
 inline auto EnsureDirectoryPOSIX(std::string const& path) -> bool {
   if(path.empty()) {
     return false;
   }
-  // Try to probe existence first with fopen (cheap, works on all KOS vfs).
-  // If the path is a directory, fopen will fail; that's expected.
-  // Use mkdir and accept EEXIST as success.
+
+  // Walk forward from the root creating each ancestor as needed so that the
+  // final ::mkdir does not fail with ENOENT when parent paths are missing.
+  for(size_t pos = 1; pos < path.size(); pos++) {
+    if(path[pos] == '/') {
+      auto ancestor = path.substr(0, pos);
+      ::mkdir(ancestor.c_str(), 0755);  // ignore EEXIST/ENOENT for partial paths
+    }
+  }
+
   if(::mkdir(path.c_str(), 0755) == 0) {
     return true; // created
   }

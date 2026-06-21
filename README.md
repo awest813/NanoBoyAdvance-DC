@@ -31,7 +31,7 @@ This fork of NanoBoyAdvance is a **Dreamcast-only port**.
 | Input | Working | Maple controller |
 | Save Files | Partial | Per-ROM saves at `/pc/saves` or VMU A1 for small saves |
 | Save States | Working | 10 slots; pause menu + L+R+Start/Select hotkeys |
-| Cheats | Partial | gpSP `.cht` files; GameShark/PAR v1/v3 write codes |
+| Cheats | Working | gpSP `.cht` files; GameShark/PAR v1/v3 write + conditional codes; hook/ROM-patch codes skipped |
 | ROM Browser | Working | Scans `/pc/roms`, `/cd`, and `/cd/gbaDC`; supports `.gba`, `.bin`, `.zip` |
 
 ## Running & Compiling

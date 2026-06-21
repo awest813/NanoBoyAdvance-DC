@@ -54,6 +54,7 @@ auto DCInput::PollInput(CoreBase& core, DCGameplayRequest& request) -> bool {
     exit_combo_frames_ = 0;
     pause_menu_frames_ = 0;
     previous_shoulder_combo_ = 0;
+    previous_buttons_ = 0xFFFF;
     return false;
   }
 
@@ -96,7 +97,11 @@ auto DCInput::PollInput(CoreBase& core, DCGameplayRequest& request) -> bool {
   // to save and Select to load the active save-state slot.
   const uint32 shoulder_combo = CONT_X | CONT_Y;
   const bool shoulders_held = (state->buttons & shoulder_combo) == shoulder_combo;
-  if(shoulders_held) {
+  // Exit combo (Start+A+B+X+Y) fully contains the shoulder shortcut.  Skip
+  // save/load when A or B is also held to avoid accidentally saving on
+  // frame 1 of the exit-hold before exit_combo_frames_ reaches its threshold.
+  const bool exit_held = (state->buttons & (CONT_A | CONT_B)) == (CONT_A | CONT_B);
+  if(shoulders_held && !exit_held) {
     if((state->buttons & CONT_START) && save_state_cooldown_ == 0) {
       request.save_state = true;
       save_state_cooldown_ = kSaveStateDebounceFrames;

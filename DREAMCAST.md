@@ -395,4 +395,69 @@ these tiers:
 |------|---------|
 | **Playable** | Holds ~full speed on at least one profile with no game-breaking issues. |
 | **Runs** | Boots and is playable but with noticeable slowdown or audio/video artifacts. |
+| **Broken** | Fails to boot, hangs, or has unplayable issues. |
+
+## Release Packaging
+
+### Building a CDI Image
+
+After a successful build (`cmake --build build-dc`), the output binary is
+`build-dc/NanoBoyAdvance-DC.elf`.  To create a self-booting CDI:
+
+```sh
+# 1. Scramble the ELF into a 1ST_READ.BIN
+sh-elf-objcopy -O binary build-dc/NanoBoyAdvance-DC.elf \
+  build-dc/NanoBoyAdvance-DC.bin
+# (bootdreams/mkdcdisc handles scrambling automatically)
+
+# 2. Create the disc directory
+mkdir -p cdi_root
+cp build-dc/NanoBoyAdvance-DC.bin cdi_root/1ST_READ.BIN
+
+# 3. Place BIOS and ROMs
+cp /path/to/bios.bin cdi_root/
+mkdir -p cdi_root/gbaDC
+cp /path/to/roms/*.gba cdi_root/gbaDC/
+
+# 4. Build ISO with mkisofs, then CDI with cdi4dc
+mkisofs -C 0,11702 -V NBA_DC -l -o nba_dc.iso cdi_root
+cdi4dc nba_dc.iso nba_dc.cdi
+```
+
+**BootDreams alternative** (Windows GUI): point BootDreams at `cdi_root/` with
+`NBA_DC` as the disc label; it handles scrambling and CDI creation.
+
+### Recommended Layout for CDI Distribution
+
+```
+cdi_root/
+├── 1ST_READ.BIN      # Scrambled emulator binary
+├── bios.bin           # (user-supplied, not distributed)
+├── game_config.txt    # Optional: idle-loop hints (gpSP compatible format)
+├── gbaDC/             # gpSP convention: ROM root on CD
+│   ├── ROM1.gba
+│   └── ROM2.gba
+└── nba-dc.toml        # Optional: default settings (overridden by /pc/nba-dc.toml)
+```
+
+The emulator scans `/cd/gbaDC/` (the gpSP convention) so placing ROMs there
+ensures compatibility with existing CD builds and multi-boot discs.
+
+### SD Card (Serial Port / GDEMU / MODE) Setup
+
+```
+/pc/
+├── nba-dc.toml        # Settings (created automatically on first save)
+├── bios.bin            # BIOS (copied here or loaded from /cd/)
+├── roms/
+│   ├── game.gba
+│   ├── game.zip        # Extracted to /pc/roms/.cache/ on first load
+│   └── .cache/         # Extracted ZIP contents (256 MiB cap, LRU eviction)
+├── saves/
+│   └── game.sav        # SRAM/FLASH/EEPROM saves
+├── states/
+│   └── game_0.nbss     # Save states (10 slots per ROM)
+├── cheats/
+│   └── game.cht        # gpSP-format cheat files
+└── game_config.txt     # Idle-loop hints
 | **Broken** | Fails to boot, hangs, or has issues that prevent normal play. |

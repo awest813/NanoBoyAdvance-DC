@@ -42,6 +42,9 @@ DCVideoDevice::~DCVideoDevice() {
 
 bool DCVideoDevice::Initialize() {
 #if NBA_DC_HAS_KOS
+  if(pvr_ready_) {
+    return true;
+  }
   vid_set_mode(DM_640x480, PM_RGB565);
   vram_base_ = (u16*)vram_s;
   ClearScreen();
@@ -97,6 +100,13 @@ bool DCVideoDevice::InitializePvr() {
 void DCVideoDevice::ShutdownPvr() {
   // Don't free VRAM out from under an in-flight DMA transfer.
   WaitForUploadDma();
+
+  // Flush any submitted scene before tearing down PVR state.  Skipping
+  // this can leave the host GPU pipeline mid-draw, crashing Flycast.
+  if(pvr_scene_submitted_) {
+    pvr_wait_ready();
+    pvr_scene_submitted_ = false;
+  }
 
   if(texture_vram_) {
     pvr_mem_free(texture_vram_);
