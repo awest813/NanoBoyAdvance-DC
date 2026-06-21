@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "device/dc_audio_device.hh"
+
+#include "dc_log.hh"
+
 #include <algorithm>
 #include <cstring>
 
@@ -14,6 +17,8 @@ DCAudioDevice* DCAudioDevice::s_instance = nullptr;
 void DCAudioDevice::SetBufferSize(int bytes) {
   if(bytes == 2048 || bytes == 4096 || bytes == 8192) {
     buffer_size_ = bytes;
+  } else {
+    DCLog("[NBA-DC] Audio: ignoring invalid buffer size %d (valid: 2048, 4096, 8192)\n", bytes);
   }
 }
 
@@ -84,9 +89,10 @@ void DCAudioDevice::SetPause(bool value) {
 void* DCAudioDevice::StreamCallback(snd_stream_hnd_t hnd, int req, int* done) {
   (void)hnd;
 
-  static s16 stream_buffer[8192];
+  static constexpr int kStreamBufferSamples = 8192;
+  static s16 stream_buffer[kStreamBufferSamples];
 
-  const int request = std::min(req, static_cast<int>(sizeof(stream_buffer)));
+  const int request = std::min(req, static_cast<int>(kStreamBufferSamples));
 
   if(s_instance && s_instance->callback_) {
     s_instance->callback_(s_instance->userdata_, stream_buffer, request);

@@ -12,6 +12,9 @@
 
 namespace nba::core {
 
+inline constexpr int g_ticks_shift[4] = { 0, 6, 8, 10 };
+inline constexpr int g_ticks_mask[4] = { 0, 0x3F, 0xFF, 0x3FF };
+
 struct Timer {
   Timer(Scheduler& scheduler, IRQ& irq, APU& apu);
 

@@ -73,7 +73,7 @@ flowchart TB
   end
 
   CORE --> ppu
-  OUT -->|"suppress_video_draw=false"| DRAW
+  OUT -->|"suppress_video_draw=false → DrawRgb565"| DRAW
   PRESENT --> VRAM
 ```
 
@@ -81,9 +81,9 @@ flowchart TB
 
 | Stage | Format | Approx. work |
 |-------|--------|----------------|
-| Merge write | GBA RGB555 → **RGBA8888** | Per visible pixel, cycle-stepped |
-| `ConvertFrameToTexture` | RGBA8888 → **RGB565** | 38,400 px × LUT lookup |
-| `pvr_txr_load` | Staging → PVR VRAM | 256×160×2 bytes DMA-style copy |
+| Merge write | GBA RGB555 → **RGB565** | `RGB555ToRGB565` arithmetic (no LUT) |
+| `DCVideoDevice::DrawRgb565` | RGB565 → staging memcpy | 240×160×2 memcpy |
+| `pvr_txr_load_dma` | Staging → PVR VRAM | 256×160×2 bytes DMA-style copy |
 | `RenderScaledFramePvr` | Textured quad 240→480 × 160→320 | GPU (cheap vs CPU blit) |
 | UI overlays | RGB565 VRAM writes | Margins only |
 
@@ -117,7 +117,7 @@ Use this as the baseline — do not re-plan solved problems.
 - [x] Skip sprite fetch/init and BG/merge/window init on suppressed frames
 - [x] `RunForDisplayFrame` batches skip + present (`eb5c5580`)
 - [x] Auto frame skip UI + Speed-profile tuning (56/58.5 FPS thresholds)
-- [x] RGB565 conversion via 32K LUT (`dc_video_device`)
+- [x] RGB565 conversion (was 64K LUT; replaced with arithmetic — see §4 bottleneck #2 fix)
 - [x] Clear stride padding once at init instead of per presented frame
   (padding columns are never sampled: `uv_clamp` + `u_max = 240/256`)
 - [x] Hoist present-quad geometry/UV to compile-time constants (no per-frame divides)
@@ -144,8 +144,10 @@ Use this as the baseline — do not re-plan solved problems.
 
 1. **PPU merge + background + sprites** — cycle-accurate scanline stepping dominates
    when `suppress_video_draw = false`.
-2. **RGBA8888 merge output** — expands GBA 15-bit color to 32-bit; second pass in
-   `ConvertFrameToTexture` shrinks back to 565.
+2. **RGBA8888 merge output** — was expanding GBA 15-bit color to 32-bit then converting
+   back to 565. **Now fixed:** `video_rgb565_output = true` (always on DC) writes
+   RGB565 directly in `WriteMergedPixel` via `RGB555ToRGB565` (arithmetic, no LUT).
+   `ConvertFrameToTexture` is bypassed; `UploadRgb565Frame` does a direct memcpy.
 3. **Texture upload** — full 82 KiB stride buffer (`256×160×2`) every presented frame.
 4. **PVR scene overhead** — `pvr_wait_ready`, `pvr_scene_begin/finish` per Present.
 5. **Frame skip policy** — running N+1 emulated frames per display frame increases
@@ -248,6 +250,15 @@ retail `PVR`/`PRESENT` segment timers prove a bottleneck.
 
 ### Phase E — Frame pipeline policy (medium payoff, policy risk)
 
+> **Instrumented:** `DCFrameTiming` now reports `merge_path_slow/text/bitmap`
+> alongside the segment timers (via `Config::dc_merge_path_callback`).
+>
+> To determine if the N+1 catch-up model is self-defeating, compare `EMU` ms
+> (total skip+1 frames) against `PPU` ms (presented-frame merge only):
+> - `EMU_ms ≈ PPU_ms` → ARM interpreter is cheap; catch-up works
+> - `EMU_ms ≫ PPU_ms` → ARM interpreter dominates; skip=0 is faster than skip=1
+> Add `NBA_DC_FRAME_TIMING=1` and watch the per-second log on retail hardware.
+
 **Goal:** Smarter display/emulated frame relationship.
 
 | Task | Detail |
@@ -345,12 +356,10 @@ Toggle: `NBA_DC_FRAME_TIMING=1` or extend **Show FPS** setting.
 | Knob | Accuracy | Balanced | Speed | Overhaul impact |
 |------|----------|----------|-------|-----------------|
 | PPU fast raster (C) | Off | Off | On | Main CPU win |
-| RGB565 merge (B) | On* | On | On | Saves CONV on all |
+| RGB565 merge (B) | On | On | On | Saves CONV on all (arithmetic, no LUT) |
 | Frame skip (E) | 0 | 0 | Auto | Presentation policy |
 | PVR direct write (D) | On | On | On | All profiles |
 | LCD ghosting | On | Off | Off | Unchanged (N/A DC) |
-
-\*Accuracy may keep RGBA8888 for bit-exact merge if hardware tests show diffs.
 
 ---
 
@@ -385,7 +394,7 @@ Suggested checkbox granularity:
 - [ ] Phase C — SH4-tuned inner loops (deferred until retail segment timers identify the hot loop — Phase A.2/A.3)
 - [x] Phase D — direct RGB565 PVR write, conditional scene wait, async TA-DMA upload (+ settings toggle)
 - [x] Phase D — twiddle / double-buffer **evaluated → deferred** (see Phase D evaluation outcomes; not beneficial for per-frame full-frame upload)
-- [x] Phase E (partial) — EF-aware auto skip + EMU ms/display headroom hint
+- [x] Phase E (partial) — EF-aware auto skip + EMU ms/display headroom hint + merge-path hit-rate instrumentation (slow/text/bitmap via `DCFrameTiming`)
 - [ ] Phase E — catch-up decoupled from skip-draw
 - [ ] Phase F — research items (optional)
 
@@ -395,9 +404,9 @@ Suggested checkbox granularity:
 
 1. **Hardware:** Run Speed profile on a **sprite-heavy** and **Mode-7** retail ROM;
    fill `COMPATIBILITY.md` retail table (blocks all other validation).
-2. **Software:** Implement Phase A.3 frame segment timers (small, high signal).
-3. **Software:** Implement Phase B.1–B.4 (RGB565 merge) — largest single win for
-   presented-frame cost with contained scope.
+2. ~~**Software:** Implement Phase A.3 frame segment timers~~ — **Done** (`DCFrameTiming`).
+3. ~~**Software:** Implement Phase B.1–B.4 (RGB565 merge)~~ — **Done** (arithmetic
+   `RGB555ToRGB565`, direct `output565[frame]`, `DrawRgb565` memcpy path).
 4. **Process:** Any PPU/GPU PR must cite before/after retail or host pixel-diff
    evidence; idle-loop FPS alone is insufficient for merge approval.
 

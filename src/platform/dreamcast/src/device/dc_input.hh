@@ -4,6 +4,7 @@
 #pragma once
 
 #include <nba/core.hh>
+#include <nba/integer.hh>
 
 #if defined(PLATFORM_DREAMCAST) && __has_include(<kos.h>)
 #define NBA_DC_HAS_KOS 1
@@ -64,7 +65,7 @@ struct DCInput {
 private:
 
 #if NBA_DC_HAS_KOS
-  auto ReadControllerState() -> cont_state_t*;
+  auto ReadControllerState() const -> cont_state_t*;
   auto ButtonPressed(uint32 current, uint32 previous, uint32 mask) -> bool;
 
   u32 previous_buttons_ = 0xFFFF;

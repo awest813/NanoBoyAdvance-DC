@@ -36,6 +36,10 @@ struct Config {
 #if defined(PLATFORM_DREAMCAST)
   using DcPpuTimingCallback = void (*)(long long microseconds);
   DcPpuTimingCallback dc_ppu_timing_callback = nullptr;
+
+  enum class DcMergePath { Slow, Text, Bitmap };
+  using DcMergePathCallback = void (*)(DcMergePath path);
+  DcMergePathCallback dc_merge_path_callback = nullptr;
 #endif
 
   enum class BackupType {

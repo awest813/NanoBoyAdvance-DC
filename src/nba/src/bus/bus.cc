@@ -326,8 +326,12 @@ auto Bus::ReadOpenBus(u32 address) -> u32 {
           word  = cpu.GetFetchedOpcode(0);
           word |= cpu.GetFetchedOpcode(1) << 16;
         } else {
-          // TODO: this should be LSW=$+4 MSW=$+6
-          // Unfortunately $+6 has not been fetched at this point.
+          // r15 is odd-halfword-aligned here.  The correct open-bus word
+          // would be LSW=halfword at r15, MSW=halfword at r15+2, but the
+          // pipeline has already advanced past those addresses: opcode[0]
+          // holds r15-4 and opcode[1] holds r15-2.  Duplicating opcode[1]
+          // (r15-2) is a pragmatic approximation; no known game reads open
+          // bus values from these address ranges with odd Thumb alignment.
           word  = cpu.GetFetchedOpcode(1);
           word |= (word << 16);
         }

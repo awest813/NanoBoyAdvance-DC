@@ -153,7 +153,7 @@ void AdjustStateFolder(DreamcastConfig& config, int direction) {
   config.state_folder = kPaths[index];
 }
 
-static constexpr SettingRow kSettings[] {
+constexpr SettingRow kSettings[] {
   { "Performance", PerformanceLabel, AdjustPerformance },
   { "Show FPS", ShowFpsLabel, AdjustShowFps },
   { "PVR upload", PvrDmaUploadLabel, AdjustPvrDmaUpload },

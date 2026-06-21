@@ -6,7 +6,6 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
-#include <cstring>
 #include <string>
 
 #if NBA_DC_HAS_KOS

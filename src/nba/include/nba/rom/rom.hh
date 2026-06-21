@@ -596,9 +596,21 @@ private:
     target->valid = true;
     rom_last_page = target;
 
+    // Adaptive prefetch: only load the next sequential page when the
+    // access pattern is actually sequential.  A single random jump
+    // disables prefetch until the consecutive forward-access count
+    // reaches 2 again, avoiding wasted CD I/O during thrashing.
     if(page_start + kPageSize < rom_size) {
-      PrefetchPagedROM(page_start + kPageSize, target);
+      if(page_start == rom_last_requested_page_start + kPageSize) {
+        rom_sequential_access_count++;
+        if(rom_sequential_access_count >= 2) {
+          PrefetchPagedROM(page_start + kPageSize, target);
+        }
+      } else {
+        rom_sequential_access_count = 0;
+      }
     }
+    rom_last_requested_page_start = page_start;
 
     return target;
   }
@@ -706,6 +718,8 @@ private:
   bool rom_read_error = false;
   PagedROMPage* rom_last_page = nullptr;
   long rom_file_pos = -1;
+  u32 rom_last_requested_page_start = 0xFFFFFFFF;
+  int rom_sequential_access_count = 0;
 #endif
   std::unique_ptr<Backup> backup_sram;
   std::unique_ptr<Backup> backup_eeprom;

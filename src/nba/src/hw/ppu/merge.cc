@@ -267,15 +267,31 @@ void PPU::DrawMergeImpl(int cycles) {
   if(merge.cycle == 0U && cycles >= 960) {
     bool enable_obj = false;
     if(CanUseFastTextMerge(enable_obj)) {
+#if defined(PLATFORM_DREAMCAST)
+      if(config->dc_merge_path_callback) {
+        config->dc_merge_path_callback(Config::DcMergePath::Text);
+      }
+#endif
       FastMergeTextScanlineImpl(cycles, enable_obj);
       return;
     }
 
     if(CanUseFastBitmapMerge()) {
+#if defined(PLATFORM_DREAMCAST)
+      if(config->dc_merge_path_callback) {
+        config->dc_merge_path_callback(Config::DcMergePath::Bitmap);
+      }
+#endif
       FastMergeBitmapScanlineImpl(cycles);
       return;
     }
   }
+
+#if defined(PLATFORM_DREAMCAST)
+  if(config->dc_merge_path_callback) {
+    config->dc_merge_path_callback(Config::DcMergePath::Slow);
+  }
+#endif
 
   static constexpr int k_min_max_bg[8][2] {
     {0,  3}, // Mode 0 (BG0 - BG3 text-mode)

@@ -11,9 +11,9 @@
 #include <filesystem>
 #include <memory>
 
-namespace fs = std::filesystem;
-
 namespace nba {
+
+namespace fs = std::filesystem;
 
 // Runs a full emulation session: BIOS check, ROM load, core init, gameplay
 // loop with pause menu, save-state hotkeys, auto frame-skip, FPS overlay,

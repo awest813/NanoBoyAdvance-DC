@@ -12,9 +12,9 @@
 #include <filesystem>
 #include <sys/stat.h>
 
-namespace fs = std::filesystem;
-
 namespace nba {
+
+namespace fs = std::filesystem;
 
 inline auto IsVMUSaveFolder(std::string const& path) -> bool {
   return path.rfind("/vmu/", 0) == 0;

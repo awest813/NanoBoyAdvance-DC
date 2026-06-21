@@ -12,9 +12,9 @@
 #include <memory>
 #include <string>
 
-namespace fs = std::filesystem;
-
 namespace nba {
+
+namespace fs = std::filesystem;
 
 struct DCGameplayMenu {
   enum class Action {

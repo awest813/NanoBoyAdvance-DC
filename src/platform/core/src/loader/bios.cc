@@ -2,6 +2,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include <platform/loader/bios.hh>
+
+#if defined(PLATFORM_DREAMCAST)
+#include <platform/loader/dc_virtual_fs.hh>
+#endif
+
 #include <filesystem>
 #include <fstream>
 #include <vector>
@@ -11,6 +16,26 @@ namespace nba {
 static constexpr size_t kBIOSSize = 0x4000;
 
 static auto ReadBIOSFile(fs::path const& path, std::vector<u8>& file_data) -> BIOSLoader::Result {
+#if defined(PLATFORM_DREAMCAST)
+  if(IsDreamcastVirtualPath(path)) {
+    size_t size = 0;
+    if(!GetDreamcastVirtualFileSize(path, size) || size != kBIOSSize) {
+      return BIOSLoader::Result::BadImage;
+    }
+
+    auto* file = OpenDreamcastVirtualFile(path);
+    if(!file) {
+      return BIOSLoader::Result::CannotFindFile;
+    }
+
+    file_data.resize(size);
+    const auto read = std::fread(file_data.data(), 1, size, file);
+    std::fclose(file);
+
+    return read == size ? BIOSLoader::Result::Success : BIOSLoader::Result::CannotOpenFile;
+  }
+#endif
+
   if(!fs::exists(path)) {
     return BIOSLoader::Result::CannotFindFile;
   }

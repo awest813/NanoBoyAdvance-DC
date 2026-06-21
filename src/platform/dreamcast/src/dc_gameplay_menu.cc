@@ -83,11 +83,9 @@ auto DescribeSaveStateWriteResult(SaveStateWriter::Result result) -> const char*
       return "Cannot create state file.\nCheck state folder is writable.";
     case SaveStateWriter::Result::CannotWrite:
       return "Write failed.\nDisk may be full.";
-    case SaveStateWriter::Result::Success:
-      break;
+    default:
+      return "Save state failed";
   }
-
-  return "Save state failed";
 }
 
 auto DescribeSaveStateLoadResult(SaveStateLoader::Result result) -> const char* {
@@ -100,11 +98,9 @@ auto DescribeSaveStateLoadResult(SaveStateLoader::Result result) -> const char* 
       return "State file is corrupt.\nTry another slot.";
     case SaveStateLoader::Result::UnsupportedVersion:
       return "State version not supported.\nSave a new state in this slot.";
-    case SaveStateLoader::Result::Success:
-      break;
+    default:
+      return "Load state failed";
   }
-
-  return "Load state failed";
 }
 
 auto SaveStateMessage(

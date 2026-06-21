@@ -13,8 +13,11 @@
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
+#include <dirent.h>
 #include <string>
 #include <sys/stat.h>
+#include <unistd.h>
 
 namespace nba {
 
@@ -22,6 +25,7 @@ namespace {
 
 constexpr size_t kMaxROMSize = 32 * 1024 * 1024;
 constexpr char kZipCacheDir[] = "/pc/roms/.cache";
+constexpr size_t kZipCacheMaxBytes = 256 * 1024 * 1024;
 
 auto NormalizeExtension(std::string extension) -> std::string {
   for(auto& character : extension) {
@@ -76,7 +80,61 @@ auto FindROMEntryIndex(mz_zip_archive& archive, mz_zip_archive_file_stat& stat) 
 }
 
 auto EnsureZipCacheDir() -> bool {
+  ::mkdir("/pc/roms", 0755);
   return ::mkdir(kZipCacheDir, 0755) == 0 || errno == EEXIST;
+}
+
+struct CacheFileInfo {
+  std::string name;
+  size_t size = 0;
+  time_t mtime = 0;
+};
+
+auto ScanZipCache(std::vector<CacheFileInfo>& files) -> void {
+  if(auto* dir = ::opendir(kZipCacheDir)) {
+    while(auto* entry = ::readdir(dir)) {
+      if(std::strcmp(entry->d_name, ".") == 0 || std::strcmp(entry->d_name, "..") == 0) {
+        continue;
+      }
+
+      const auto filename = std::string{kZipCacheDir} + "/" + entry->d_name;
+      struct stat st {};
+      if(::stat(filename.c_str(), &st) == 0 && S_ISREG(st.st_mode) && st.st_size > 0) {
+        files.push_back(CacheFileInfo{filename, static_cast<size_t>(st.st_size), st.st_mtime});
+      }
+    }
+    ::closedir(dir);
+  }
+}
+
+auto EvictOldestZipCacheEntries(size_t bytes_to_keep) -> void {
+  std::vector<CacheFileInfo> files;
+  ScanZipCache(files);
+
+  size_t total_bytes = 0;
+  for(auto const& f : files) {
+    total_bytes += f.size;
+  }
+
+  if(total_bytes + bytes_to_keep <= kZipCacheMaxBytes) {
+    return;
+  }
+
+  std::sort(files.begin(), files.end(), [](CacheFileInfo const& a, CacheFileInfo const& b) {
+    return a.mtime < b.mtime;
+  });
+
+  const size_t target = total_bytes - std::min(total_bytes, kZipCacheMaxBytes - bytes_to_keep);
+  size_t evicted = 0;
+  for(auto const& f : files) {
+    if(evicted >= target) break;
+    if(::unlink(f.name.c_str()) == 0) {
+      std::printf("[NBA-DC] ZIP cache evict: %s (%lu bytes)\n",
+                  f.name.c_str(), static_cast<unsigned long>(f.size));
+      std::fflush(stdout);
+      evicted += f.size;
+    }
+  }
 }
 
 auto CachePathForZip(fs::path const& zip_path) -> fs::path {
@@ -161,6 +219,8 @@ auto ResolveDreamcastZipROM(fs::path const& zip_path, fs::path& rom_path) -> boo
     mz_zip_reader_end(&archive);
     return false;
   }
+
+  EvictOldestZipCacheEntries(expected_size);
 
   const auto cache_string = cache_path.string();
   if(!mz_zip_reader_extract_to_file(

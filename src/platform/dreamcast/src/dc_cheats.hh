@@ -9,9 +9,9 @@
 #include <string>
 #include <vector>
 
-namespace fs = std::filesystem;
-
 namespace nba {
+
+namespace fs = std::filesystem;
 
 // gpSP-compatible GameShark / PAR cheat file support (.cht).
 struct DCCheatDatabase {

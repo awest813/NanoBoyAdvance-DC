@@ -20,30 +20,11 @@ namespace nba {
 
 namespace {
 
-struct Rgb565Lut {
-  u16 rgb555[32768];
-
-  Rgb565Lut() {
-    for(int index = 0; index < 32768; index++) {
-      const int r5 = (index >> 10) & 31;
-      const int g6 = (index >> 5) & 63;
-      const int b5 = index & 31;
-      rgb555[index] = static_cast<u16>((r5 << 11) | (g6 << 5) | b5);
-    }
-  }
-
-  auto FromRgb888(u32 pixel) const -> u16 {
-    const int index =
-      ((pixel >> 16) & 0xF8) << 7 |
-      ((pixel >>  8) & 0xFC) << 3 |
-      ((pixel >>  3) & 0x1F);
-    return rgb555[index];
-  }
-};
-
-auto Rgb565Lookup() -> Rgb565Lut const& {
-  static Rgb565Lut const lut;
-  return lut;
+auto FromRgb888(u32 pixel) -> u16 {
+  const u32 r5 = (pixel >> 19) & 0x1F;
+  const u32 g6 = (pixel >> 10) & 0x3F;
+  const u32 b5 = (pixel >>  3) & 0x1F;
+  return static_cast<u16>((r5 << 11) | (g6 << 5) | b5);
 }
 
 } // namespace
@@ -133,8 +114,6 @@ void DCVideoDevice::ShutdownPvr() {
 void DCVideoDevice::ConvertFrameToTexture(u32* buffer) {
   NBA_DC_FRAME_TIMING_SCOPE(Conv);
 
-  const auto& lut = Rgb565Lookup();
-
   // Stride padding (x >= kGBAWidth) is cleared once in InitializePvr and is
   // never sampled, so only the visible columns are written per frame.
   for(int y = 0; y < kGBAHeight; y++) {
@@ -142,7 +121,7 @@ void DCVideoDevice::ConvertFrameToTexture(u32* buffer) {
     const u32* src = buffer + y * kGBAWidth;
 
     for(int x = 0; x < kGBAWidth; x++) {
-      row[x] = lut.FromRgb888(src[x]);
+      row[x] = FromRgb888(src[x]);
     }
   }
 
@@ -282,15 +261,13 @@ void DCVideoDevice::DrawSoftwareScaled(u32* buffer) {
     return;
   }
 
-  const auto& lut = Rgb565Lookup();
-
   for(int y = 0; y < kGBAHeight; y++) {
     for(int sy = 0; sy < kScale; sy++) {
       const int screen_y = kOffsetY + y * kScale + sy;
       u16* dst = vram_base_ + screen_y * kScreenWidth + kOffsetX;
 
       for(int x = 0; x < kGBAWidth; x++) {
-        const u16 rgb565 = lut.FromRgb888(buffer[y * kGBAWidth + x]);
+        const u16 rgb565 = FromRgb888(buffer[y * kGBAWidth + x]);
 
         for(int sx = 0; sx < kScale; sx++) {
           dst[x * kScale + sx] = rgb565;
@@ -392,11 +369,9 @@ void DCVideoDevice::DrawSoftwareScaledSDL(u32* buffer) {
     return;
   }
 
-  const auto& lut = Rgb565Lookup();
-
   for(int y = 0; y < kGBAHeight; y++) {
     for(int x = 0; x < kGBAWidth; x++) {
-      const u16 rgb565 = lut.FromRgb888(buffer[y * kGBAWidth + x]);
+      const u16 rgb565 = FromRgb888(buffer[y * kGBAWidth + x]);
 
       for(int sy = 0; sy < kScale; sy++) {
         for(int sx = 0; sx < kScale; sx++) {
@@ -428,7 +403,7 @@ void DCVideoDevice::DrawSoftwareScaledRgb565SDL(u16* buffer) {
 
 void DCVideoDevice::ClearScreen() {
 #if NBA_DC_HAS_KOS
-  vram_base_ = (u16*)vram_s;
+  RefreshFramebuffer();
   if(!vram_base_) return;
   std::memset(vram_base_, 0, kScreenWidth * kScreenHeight * sizeof(u16));
 #elif NBA_DC_HAS_SDL_MENU
@@ -438,13 +413,7 @@ void DCVideoDevice::ClearScreen() {
 
 void DCVideoDevice::DrawText(int x, int y, std::string_view text) {
 #if NBA_DC_HAS_KOS || NBA_DC_HAS_SDL_MENU
-#if NBA_DC_HAS_KOS
-  vram_base_ = (u16*)vram_s;
-  if(!vram_base_) return;
-#endif
-
-  const u16 fg = 0xFFFF;
-  const u16 bg = 0x0000;
+  RefreshFramebuffer();
 
   int cursor_x = x;
   int cursor_y = y;
@@ -481,12 +450,7 @@ void DCVideoDevice::DrawText(int x, int y, std::string_view text) {
           continue;
         }
 
-        const bool on = (bits >> (7 - col)) & 1;
-#if NBA_DC_HAS_KOS
-        vram_base_[dst_y * kScreenWidth + dst_x] = on ? fg : bg;
-#else
-        PutPixel(dst_x, dst_y, on ? fg : bg);
-#endif
+        PokePixel(dst_x, dst_y, (bits >> (7 - col)) & 1 ? kFgColor : kBgColor);
       }
     }
     cursor_x += kFontWidth;
@@ -513,20 +477,11 @@ void DCVideoDevice::DrawFilledRect(int x, int y, int width, int height, u16 colo
     return;
   }
 
-#if NBA_DC_HAS_KOS
-  vram_base_ = (u16*)vram_s;
-  if(!vram_base_) {
-    return;
-  }
-#endif
+  RefreshFramebuffer();
 
   for(int row = y0; row < y1; row++) {
     for(int col = x0; col < x1; col++) {
-#if NBA_DC_HAS_KOS
-      vram_base_[row * kScreenWidth + col] = color;
-#else
-      PutPixel(col, row, color);
-#endif
+      PokePixel(col, row, color);
     }
   }
 #else
@@ -555,7 +510,7 @@ void DCVideoDevice::DrawTextMultiline(int x, int y, std::string_view text) {
 
 void DCVideoDevice::DrawStatusBar(std::string_view text) {
 #if NBA_DC_HAS_KOS
-  vram_base_ = (u16*)vram_s;
+  RefreshFramebuffer();
   if(!vram_base_) return;
 
   for(int x = 0; x < kScreenWidth; x++) {

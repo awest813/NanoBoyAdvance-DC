@@ -198,6 +198,15 @@ auto RunGameSession(
   config->dc_ppu_timing_callback = [](long long microseconds) {
     DCFrameTiming::Instance().AddPpuMicros(std::chrono::microseconds(microseconds));
   };
+  config->dc_merge_path_callback = [](Config::DcMergePath path) {
+    auto& timing = DCFrameTiming::Instance();
+    if(!timing.IsEnabled()) return;
+    switch(path) {
+      case Config::DcMergePath::Slow:   timing.AddMergePathSlow();   break;
+      case Config::DcMergePath::Text:   timing.AddMergePathText();   break;
+      case Config::DcMergePath::Bitmap: timing.AddMergePathBitmap(); break;
+    }
+  };
   breadcrumb("Phase 4D: Video config attached");
 
   breadcrumb("Phase 5: Core create");
@@ -276,6 +285,31 @@ auto RunGameSession(
   FrameLimiter frame_limiter(kGBAFrameRate);
 #endif
   static constexpr int kSaveFlushIntervalSeconds = 60;
+
+  auto on_second_elapsed = [&](float fps) {
+    measured_fps = fps;
+    measured_page_misses = core->GetROM().TakePageMissCount();
+    const double emu_ms_per_display = DCFrameTiming::Instance().EmuMsPerDisplayFrame();
+    DCFrameTiming::Instance().OnSecondTick();
+    active_frame_skip = UpdateAutoFrameSkip(
+      *config,
+      measured_fps,
+      active_frame_skip,
+      auto_frame_skip_recovery_ticks,
+      emu_ms_per_display
+    );
+    const int emulated_fps = static_cast<int>(
+      measured_fps * static_cast<float>(active_frame_skip + 1) + 0.5f
+    );
+    DCLog(
+      "[NBA-DC] Runtime: FPS %.1f EF %d FS %s%d PG %lu\n",
+      static_cast<double>(measured_fps),
+      emulated_fps,
+      config->auto_frame_skip ? "A" : "",
+      active_frame_skip,
+      static_cast<unsigned long>(measured_page_misses)
+    );
+  };
 
   while(running) {
 #if !NBA_DC_HAS_KOS
@@ -379,56 +413,14 @@ auto RunGameSession(
           now - fps_last_update
         ).count();
         if(elapsed_ms >= 1000) {
-          measured_fps = fps_frame_count * 1000.0f / static_cast<float>(elapsed_ms);
-          measured_page_misses = core->GetROM().TakePageMissCount();
-          const double emu_ms_per_display = DCFrameTiming::Instance().EmuMsPerDisplayFrame();
-          DCFrameTiming::Instance().OnSecondTick();
-          active_frame_skip = UpdateAutoFrameSkip(
-            *config,
-            measured_fps,
-            active_frame_skip,
-            auto_frame_skip_recovery_ticks,
-            emu_ms_per_display
-          );
+          on_second_elapsed(fps_frame_count * 1000.0f / static_cast<float>(elapsed_ms));
           fps_frame_count = 0;
           fps_last_update = now;
-          const int emulated_fps = static_cast<int>(
-            measured_fps * static_cast<float>(active_frame_skip + 1) + 0.5f
-          );
-          DCLog(
-            "[NBA-DC] Runtime: FPS %.1f EF %d FS %s%d PG %lu\n",
-            static_cast<double>(measured_fps),
-            emulated_fps,
-            config->auto_frame_skip ? "A" : "",
-            active_frame_skip,
-            static_cast<unsigned long>(measured_page_misses)
-          );
         }
       }
 #else
     }, [&](float fps) {
-      measured_fps = fps;
-      measured_page_misses = core->GetROM().TakePageMissCount();
-      const double emu_ms_per_display = DCFrameTiming::Instance().EmuMsPerDisplayFrame();
-      DCFrameTiming::Instance().OnSecondTick();
-      active_frame_skip = UpdateAutoFrameSkip(
-        *config,
-        measured_fps,
-        active_frame_skip,
-        auto_frame_skip_recovery_ticks,
-        emu_ms_per_display
-      );
-      const int emulated_fps = static_cast<int>(
-        measured_fps * static_cast<float>(active_frame_skip + 1) + 0.5f
-      );
-      DCLog(
-        "[NBA-DC] Runtime: FPS %.1f EF %d FS %s%d PG %lu\n",
-        static_cast<double>(measured_fps),
-        emulated_fps,
-        config->auto_frame_skip ? "A" : "",
-        active_frame_skip,
-        static_cast<unsigned long>(measured_page_misses)
-      );
+      on_second_elapsed(fps);
     });
 #endif
 

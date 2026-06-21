@@ -43,10 +43,7 @@ auto BIOSLoader::LoadEmbedded(std::unique_ptr<CoreBase>& core) -> Result {
   return Result::Success;
 }
 
-int main(int argc, char** argv) {
-  (void)argc;
-  (void)argv;
-
+int main() {
   std::printf("NanoBoyAdvance Dreamcast Edition\n");
 
   auto video_device = std::make_shared<DCVideoDevice>();

@@ -7,9 +7,6 @@
 
 namespace nba::core {
 
-static constexpr int g_ticks_shift[4] = { 0, 6, 8, 10 };
-static constexpr int g_ticks_mask[4] = { 0, 0x3F, 0xFF, 0x3FF };
-
 Timer::Timer(Scheduler& scheduler, IRQ& irq, APU& apu)
     : scheduler(scheduler)
     , irq(irq)

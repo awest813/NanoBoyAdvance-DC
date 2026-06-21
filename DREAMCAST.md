@@ -135,6 +135,28 @@ Writable `/pc` paths require an SD/IDE adapter or equivalent host filesystem mou
 - After each paged-ROM cache miss, the next 1 MiB page is prefetched when
   possible to hide sequential CD read latency.
 
+### RAM Budget (Stock 16 MB Dreamcast)
+
+| Consumer | Size | Notes |
+|----------|------|-------|
+| GBA memory (WRAM+IRAM+VRAM+PRAM+OAM) | ~386 KiB | Core emulator state |
+| PVR texture staging + VRAM | ~164 KiB | 256×160×2 bytes × 2 |
+| Paged ROM cache (large ROMs) | 2 MiB | 2 pages × 1 MiB; 4 pages on 32 MB mod |
+| Audio ring buffer | 8–16 KiB | snd_stream buffer |
+| Code, static data, stacks | ~300 KiB | .text, .bss, heap |
+| BIOS, save states, cheats, misc | ~100 KiB | Scratch allocations |
+| **Total overhead** | **~3 MiB** | |
+| **Available for ROM data** | **~13 MiB** | |
+
+On stock hardware, large ROMs (>8 MiB) use a 2-page LRU cache because
+allocating the full ROM into RAM would exhaust available memory.  The
+`[Needs Large ROMs]` tag in the browser flags titles that cannot run on the
+current configuration unless a 32 MB RAM mod or **Large ROMs** setting is
+active.  Even with the setting enabled, heavy page thrashing is expected
+for 16 MiB cartridges.  The page-miss counter (`PG` in the FPS overlay)
+helps gauge cache pressure: a steadily climbing `PG` value indicates the
+cache is undersized for the current game.
+
 ### Flycast Testing Notes
 
 - The ROM browser enumerates `/cd` using POSIX `opendir`/`readdir`.  On real

@@ -41,6 +41,8 @@ set(HEADERS
   src/dc_log.hh
   src/dc_session.hh
   src/dc_version.hh
+  src/font_8x16.hh
+  src/open_bios.hh
 )
 
 add_executable(NanoBoyAdvance-DC)

@@ -16,7 +16,7 @@ void DCInput::ClearKeys(CoreBase& core) {
 }
 
 #if NBA_DC_HAS_KOS
-auto DCInput::ReadControllerState() -> cont_state_t* {
+auto DCInput::ReadControllerState() const -> cont_state_t* {
   maple_device_t* cont = maple_enum_type(0, MAPLE_FUNC_CONTROLLER);
   if(!cont) {
     return nullptr;
@@ -177,7 +177,7 @@ auto DCInput::PollInput(CoreBase& core, DCGameplayRequest& request) -> bool {
 
 auto DCInput::IsControllerConnected() const -> bool {
 #if NBA_DC_HAS_KOS
-  cont_state_t* state = const_cast<DCInput*>(this)->ReadControllerState();
+  cont_state_t* state = ReadControllerState();
   return state && !IsInvalidControllerState(state);
 #elif NBA_DC_HAS_SDL_MENU
   return true;

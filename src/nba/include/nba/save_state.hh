@@ -8,11 +8,14 @@
 
 namespace nba {
 
-// TODO: refactor structure to allow for packing.
+// Struct used for in-memory serialization (fread/fwrite). It is intentionally
+// not packed so that the compiler's natural alignment guarantees fast memcpy on
+// all platforms (SH4, x86, ARM). A future revision may reorder fields to
+// minimise padding without relying on pragma pack.
 
 struct SaveState {
   static constexpr u32 kMagicNumber = 0x5353424E; // NBSS
-  static constexpr u32 kCurrentVersion = 10;
+  static constexpr u32 kCurrentVersion = 11;
 
   u32 magic;
   u32 version;
@@ -33,10 +36,9 @@ struct SaveState {
 
     bool irq_line;
 
-    // TODO:
-    //bool ldm_usermode_conflict;
-    //bool cpu_mode_is_invalid;
-    //bool latch_irq_disable;
+    bool ldm_usermode_conflict;
+    bool cpu_mode_is_invalid;
+    bool latch_irq_disable;
   } arm;
 
   struct Bus {
@@ -52,7 +54,9 @@ struct SaveState {
     } memory;
 
     struct IO {
-      // TODO: store the 16-bit register value instead?
+      // Waitstate fields are stored byte-split (u8[2]) for alignment compatibility
+      // with the 8-bit GBA I/O bus layout. A future save-state version may store
+      // them as u16 to reduce the number of fields without changing the wire size.
       struct WaitstateControl {
         u8 sram;
         u8 ws0[2];

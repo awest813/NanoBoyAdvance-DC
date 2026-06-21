@@ -9,9 +9,9 @@
 #include <filesystem>
 #include <string>
 
-namespace fs = std::filesystem;
-
 namespace nba {
+
+namespace fs = std::filesystem;
 
 // Autoboot Tekken constants.  Only used when kDreamcastAutobootTekken is
 // enabled for CDI-only stability testing.

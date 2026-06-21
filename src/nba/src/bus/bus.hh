@@ -169,19 +169,13 @@ struct Bus {
 
     if(address >= boundary) {
       for(int i = 0; i < cycles; i++) {
-        do {
-          Step(1);
-          hw.ppu.Sync();
-        } while(hw.ppu.DidAccessVRAM_OBJ());
+        SyncUntilVRAMAccess([this]() { return hw.ppu.DidAccessVRAM_OBJ(); });
       }
 
       return hw.ppu.ReadVRAM_OBJ<T>(address, boundary);
     } else {
       for(int i = 0; i < cycles; i++) {
-        do {
-          Step(1);
-          hw.ppu.Sync();
-        } while(hw.ppu.DidAccessVRAM_BG());
+        SyncUntilVRAMAccess([this]() { return hw.ppu.DidAccessVRAM_BG(); });
       }
 
       return hw.ppu.ReadVRAM_BG<T>(address);
@@ -196,19 +190,11 @@ struct Bus {
       address &= 0x1FFFF;
 
       if(address >= boundary) {
-        // TODO: de-duplicate this code (see ReadVRAM):
-        do {
-          Step(1);
-          hw.ppu.Sync();
-        } while(hw.ppu.DidAccessVRAM_OBJ());
+        SyncUntilVRAMAccess([this]() { return hw.ppu.DidAccessVRAM_OBJ(); });
 
         hw.ppu.WriteVRAM_OBJ<T>(address, value, boundary);
       } else {
-        // TODO: de-duplicate this code (see ReadVRAM):
-        do {
-          Step(1);
-          hw.ppu.Sync();
-        } while(hw.ppu.DidAccessVRAM_BG());
+        SyncUntilVRAMAccess([this]() { return hw.ppu.DidAccessVRAM_BG(); });
 
         hw.ppu.WriteVRAM_BG<T>(address, value);
       }
@@ -220,20 +206,14 @@ struct Bus {
 
   template<typename T>
   auto ALWAYS_INLINE ReadOAM(u32 address) noexcept -> T {
-    do {
-      Step(1);
-      hw.ppu.Sync();
-    } while(hw.ppu.DidAccessOAM());
+    SyncUntilVRAMAccess([this]() { return hw.ppu.DidAccessOAM(); });
 
     return hw.ppu.ReadOAM<T>(address);
   }
 
   template<typename T>
   void ALWAYS_INLINE WriteOAM(u32 address, T value) noexcept {
-    do {
-      Step(1);
-      hw.ppu.Sync();
-    } while(hw.ppu.DidAccessOAM());
+    SyncUntilVRAMAccess([this]() { return hw.ppu.DidAccessOAM(); });
 
     hw.ppu.WriteOAM<T>(address, value);
   }
@@ -247,6 +227,14 @@ struct Bus {
   void StopPrefetch();
   void Step(int cycles);
   void UpdateWaitStateTable();
+
+  template<typename Predicate>
+  void ALWAYS_INLINE SyncUntilVRAMAccess(Predicate&& predicate) {
+    do {
+      Step(1);
+      hw.ppu.Sync();
+    } while(predicate());
+  }
 
   void LoadState(SaveState const& state);
   void CopyState(SaveState& state);

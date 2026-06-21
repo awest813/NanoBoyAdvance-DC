@@ -6,13 +6,12 @@
 #include "dc_config.hh"
 
 #include <filesystem>
-#include <optional>
 #include <string>
 #include <vector>
 
-namespace fs = std::filesystem;
-
 namespace nba {
+
+namespace fs = std::filesystem;
 
 struct ROMEntry {
   fs::path path;

@@ -9,11 +9,10 @@
 #include "device/dc_input.hh"
 
 #include <filesystem>
-#include <optional>
-
-namespace fs = std::filesystem;
 
 namespace nba {
+
+namespace fs = std::filesystem;
 
 struct DCFrontend {
   enum class Action {

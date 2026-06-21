@@ -73,6 +73,26 @@ private:
   static constexpr int kTextureBytes = kTextureStride * kTextureHeight * static_cast<int>(sizeof(u16));
   static constexpr int kTextureUploadBytes = kTextureStride * kGBAHeight * static_cast<int>(sizeof(u16));
 
+  static constexpr u16 kFgColor = 0xFFFF;
+  static constexpr u16 kBgColor = 0x0000;
+
+  void RefreshFramebuffer() {
+#if NBA_DC_HAS_KOS
+    vram_base_ = (u16*)vram_s;
+#endif
+  }
+
+  void PokePixel(int x, int y, u16 color) {
+#if NBA_DC_HAS_KOS
+    if(!vram_base_) return;
+    vram_base_[y * kScreenWidth + x] = color;
+#elif NBA_DC_HAS_SDL_MENU
+    sdl_pixels_[static_cast<size_t>(y) * kScreenWidth + static_cast<size_t>(x)] = color;
+#else
+    (void)x; (void)y; (void)color;
+#endif
+  }
+
 #if NBA_DC_HAS_KOS
   bool InitializePvr();
   void ShutdownPvr();

@@ -20,9 +20,9 @@
 #define NBA_DC_VFS_HAS_ARCH 0
 #endif
 
-namespace fs = std::filesystem;
-
 namespace nba {
+
+namespace fs = std::filesystem;
 
 inline auto IsDreamcastVirtualPath(fs::path const& path) -> bool {
   const auto path_string = path.string();
@@ -79,10 +79,12 @@ inline auto GetDreamcastVirtualFileSize(
   for(auto const& candidate : DreamcastVirtualPathCandidates(path)) {
     struct stat st {};
     if(::stat(candidate.c_str(), &st) == 0 && S_ISREG(st.st_mode) && st.st_size > 0) {
-      file_size = static_cast<size_t>(st.st_size);
-      if(file_size <= max_size) {
-        return true;
+      if(static_cast<size_t>(st.st_size) > max_size) {
+        file_size = 0;
+        return false;
       }
+      file_size = static_cast<size_t>(st.st_size);
+      return true;
     }
   }
 

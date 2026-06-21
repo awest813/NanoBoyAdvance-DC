@@ -34,10 +34,9 @@ void ARM7TDMI::LoadState(SaveState const& save_state) {
 
   irq_line = save_state.arm.irq_line;
 
-  // TODO: save and restore these variables:
-  ldm_usermode_conflict = false;
-  cpu_mode_is_invalid = false;
-  latch_irq_disable = state.cpsr.f.mask_irq;
+  ldm_usermode_conflict = save_state.arm.ldm_usermode_conflict;
+  cpu_mode_is_invalid = save_state.arm.cpu_mode_is_invalid;
+  latch_irq_disable = save_state.arm.latch_irq_disable;
 }
 
 void ARM7TDMI::CopyState(SaveState& save_state) {
@@ -61,6 +60,10 @@ void ARM7TDMI::CopyState(SaveState& save_state) {
   }
 
   save_state.arm.irq_line = irq_line;
+
+  save_state.arm.ldm_usermode_conflict = ldm_usermode_conflict;
+  save_state.arm.cpu_mode_is_invalid = cpu_mode_is_invalid;
+  save_state.arm.latch_irq_disable = latch_irq_disable;
 }
 
 } // namespace nba::core::arm

@@ -7,9 +7,8 @@
 
 #pragma once
 
-#include <array>
-#include <cstdint>
 #include <cstddef>
+#include <cstdint>
 
 namespace nba {
 

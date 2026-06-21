@@ -67,6 +67,21 @@ public:
     presented_frames_ += count;
   }
 
+  void AddMergePathSlow() {
+    if(!enabled_) return;
+    merge_path_slow_++;
+  }
+
+  void AddMergePathText() {
+    if(!enabled_) return;
+    merge_path_text_++;
+  }
+
+  void AddMergePathBitmap() {
+    if(!enabled_) return;
+    merge_path_bitmap_++;
+  }
+
   auto EmuMsPerDisplayFrame() const -> double {
     if(presented_frames_ == 0) {
       return 0.0;
@@ -86,14 +101,17 @@ public:
 
     DCLog(
       "[NBA-DC] Frame timing: PPU %4.1fms CONV %4.1fms PVR %4.1fms PRESENT %4.1fms "
-      "EMU %4.1fms (%d emu / %d display frames)\n",
+      "EMU %4.1fms (%d emu / %d display frames) MERGE slow:%d text:%d bitmap:%d\n",
       ppu_us_ / 1000.0,
       conv_us_ / 1000.0,
       pvr_us_ / 1000.0,
       present_us_ / 1000.0,
       emu_us_ / 1000.0,
       emulated_frames_,
-      presented_frames_
+      presented_frames_,
+      merge_path_slow_,
+      merge_path_text_,
+      merge_path_bitmap_
     );
     ResetInterval();
   }
@@ -106,6 +124,9 @@ public:
     emu_us_ = 0;
     emulated_frames_ = 0;
     presented_frames_ = 0;
+    merge_path_slow_ = 0;
+    merge_path_text_ = 0;
+    merge_path_bitmap_ = 0;
   }
 
 private:
@@ -119,6 +140,9 @@ private:
   u64 emu_us_ = 0;
   int emulated_frames_ = 0;
   int presented_frames_ = 0;
+  int merge_path_slow_ = 0;
+  int merge_path_text_ = 0;
+  int merge_path_bitmap_ = 0;
 };
 
 class DCFrameTimingScope {

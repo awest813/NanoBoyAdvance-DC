@@ -3,6 +3,7 @@
 
 #include "dc_rom_browser.hh"
 
+#include "dc_log.hh"
 #include "dc_memory.hh"
 #include <platform/loader/dc_virtual_fs.hh>
 #include <platform/loader/rom.hh>
@@ -210,6 +211,10 @@ static auto AddDirectoryEntries(
     }
 
     AddROMEntry(path, seen, entries, config);
+  }
+
+  if(error) {
+    DCLog("[NBA-DC] ROM scan: %s: %s\n", directory.c_str(), error.message().c_str());
   }
 }
 
