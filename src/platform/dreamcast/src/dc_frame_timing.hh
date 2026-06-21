@@ -3,8 +3,9 @@
 
 #pragma once
 
+#include "dc_log.hh"
+
 #include <chrono>
-#include <cstdio>
 #include <cstdlib>
 
 namespace nba {
@@ -83,7 +84,7 @@ public:
       return;
     }
 
-    std::printf(
+    DCLog(
       "[NBA-DC] Frame timing: PPU %4.1fms CONV %4.1fms PVR %4.1fms PRESENT %4.1fms "
       "EMU %4.1fms (%d emu / %d display frames)\n",
       ppu_us_ / 1000.0,
@@ -94,7 +95,6 @@ public:
       emulated_frames_,
       presented_frames_
     );
-    std::fflush(stdout);
     ResetInterval();
   }
 

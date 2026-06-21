@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "dc_config.hh"
+#include "dc_log.hh"
 
 #include <platform/loader/dc_virtual_fs.hh>
 
@@ -92,54 +93,29 @@ auto DreamcastConfig::ProfileFromName(std::string const& name, PerformanceProfil
   return fallback;
 }
 
-void DreamcastConfig::LoadDreamcast(std::string const& path) {
-  ApplyDefaults();
-
-  if(std::filesystem::exists(path)) {
-    Load(path);
-    return;
-  }
-
-  SaveDreamcast(path);
-}
-
 auto DreamcastConfig::TryLoadDreamcast(std::string const& path) -> ConfigLoadResult {
   ApplyDefaults();
 
   std::string content;
   if(!ReadDreamcastTextFile(path, content)) {
-    std::printf("[NBA-DC] Config: using defaults (%s not found or unreadable)\n", path.c_str());
-    std::fflush(stdout);
+    DCLog("[NBA-DC] Config: using defaults (%s not found or unreadable)\n", path.c_str());
     return ConfigLoadResult::UsingDefaults;
   }
 
   if(content.empty()) {
-    std::printf("[NBA-DC] Config: empty file at %s, using defaults\n", path.c_str());
-    std::fflush(stdout);
+    DCLog("[NBA-DC] Config: empty file at %s, using defaults\n", path.c_str());
     return ConfigLoadResult::EmptyFile;
   }
 
   try {
     LoadFromToml(toml::parse_str(content));
-    std::printf("[NBA-DC] Config: loaded %s\n", path.c_str());
-    std::fflush(stdout);
+    DCLog("[NBA-DC] Config: loaded %s\n", path.c_str());
     return ConfigLoadResult::Loaded;
   } catch(std::exception const& ex) {
-    std::printf("[NBA-DC] Config: parse error in %s (%s), using defaults\n", path.c_str(), ex.what());
-    std::fflush(stdout);
+    DCLog("[NBA-DC] Config: parse error in %s (%s), using defaults\n", path.c_str(), ex.what());
     ApplyDefaults();
     return ConfigLoadResult::ParseError;
   }
-}
-
-void DreamcastConfig::SaveDreamcast(std::string const& path) {
-  const auto path_string = path;
-  if(path_string.rfind("/pc/", 0) == 0 || path_string.rfind("/cd/", 0) == 0) {
-    SaveDreamcastSafe(path_string);
-    return;
-  }
-
-  Save(path);
 }
 
 auto DreamcastConfig::SaveDreamcastSafe(std::string const& path) -> bool {
@@ -151,17 +127,15 @@ auto DreamcastConfig::SaveDreamcastSafe(std::string const& path) -> bool {
     stream << data;
     content = stream.str();
   } catch(std::exception const& ex) {
-    std::printf("[NBA-DC] Config: serialize error for %s (%s)\n", path.c_str(), ex.what());
-    std::fflush(stdout);
+    DCLog("[NBA-DC] Config: serialize error for %s (%s)\n", path.c_str(), ex.what());
     return false;
   }
 
   const bool ok = WriteDreamcastTextFile(path, content);
 
-  std::printf("[NBA-DC] Config: save %s %s (%lu bytes)\n",
-              path.c_str(), ok ? "ok" : "failed",
-              static_cast<unsigned long>(content.size()));
-  std::fflush(stdout);
+  DCLog("[NBA-DC] Config: save %s %s (%lu bytes)\n",
+        path.c_str(), ok ? "ok" : "failed",
+        static_cast<unsigned long>(content.size()));
   return ok;
 }
 

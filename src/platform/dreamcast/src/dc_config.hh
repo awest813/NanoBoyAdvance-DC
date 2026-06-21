@@ -49,19 +49,8 @@ struct DreamcastConfig : PlatformConfig {
   int save_state_slot = 0;
 
   void ApplyDefaults();
-  // Applies a profile's preset to the CPU/audio/video knobs. Intended to be
-  // called when the user explicitly switches profiles in the settings menu.
   void ApplyPerformanceProfile(PerformanceProfile profile);
-  void LoadDreamcast(std::string const& path);
-  // Loads settings from a Dreamcast virtual path without std::filesystem or
-  // auto-creating missing files.  Falls back to defaults when unreadable.
   auto TryLoadDreamcast(std::string const& path) -> ConfigLoadResult;
-  void SaveDreamcast(std::string const& path);
-  // Best-effort config save that serializes to memory and writes the whole file
-  // with a single fopen("wb"), avoiding std::filesystem and the read-modify
-  // (toml::parse of the existing file) that the regular Save path performs.
-  // Safe to call at a quiet point (e.g. right before launching a ROM) on
-  // Flycast's /pc/ virtual filesystem.  Returns true if the file was written.
   auto SaveDreamcastSafe(std::string const& path) -> bool;
 
   static auto ProfileName(PerformanceProfile profile) -> const char*;

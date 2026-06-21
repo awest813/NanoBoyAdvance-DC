@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #include "dc_cheats.hh"
+#include "dc_log.hh"
 
 #include <platform/loader/dc_virtual_fs.hh>
 
@@ -215,12 +216,11 @@ auto DCCheatDatabase::LoadForROM(fs::path const& rom_path) -> bool {
     }
   }
 
-  std::printf(
+  DCLog(
     "[NBA-DC] Cheats: loaded %lu entries from %s\n",
     static_cast<unsigned long>(entries_.size()),
     cheat_path.string().c_str()
   );
-  std::fflush(stdout);
 
   return !entries_.empty();
 }
