@@ -365,9 +365,19 @@ void TestSmcInvalidation() {
   Expect(after_poke.invalidations >= 1, "smc: poke invalidated compiled page");
   Expect(after_poke.cache_blocks == 0, "smc: cache flushed after code write");
 
+  // Restart at the block entry with a pipeline that matches patched memory
+  // (PC was sitting on `b self` after the first Run).
+  nba::SaveState st{};
+  dyna->CopyState(st);
+  st.arm.regs.gpr[0] = 0;
+  st.arm.regs.gpr[15] = entry + 4;
+  st.arm.pipe.opcode[0] = ThumbMovImm(0, 1);
+  st.arm.pipe.opcode[1] = ThumbMovImm(0, 7);
+  dyna->LoadState(st);
+
   dyna->Run(4000);
   const auto snap = Capture(*dyna);
-  // After recompile: mov #1; mov #7; b self → r0 == 7
+  // mov #1; mov #7; b self → r0 == 7
   Expect(snap.r0 == 7, "smc: recompiled block sees patched opcode");
 
   // Data write on a different IWRAM page must not flush code pages.
