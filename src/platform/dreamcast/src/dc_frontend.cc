@@ -33,6 +33,10 @@ auto ShowFpsLabel(DreamcastConfig const& config) -> std::string {
   return config.show_fps ? "On" : "Off";
 }
 
+auto CpuDynarecLabel(DreamcastConfig const& config) -> std::string {
+  return config.cpu_dynarec ? "On" : "Off";
+}
+
 auto AllowLargeRomsLabel(DreamcastConfig const& config) -> std::string {
   if(HasExtendedRAM()) {
     return "Auto (32 MB)";
@@ -84,6 +88,11 @@ void AdjustPerformance(DreamcastConfig& config, int direction) {
 void AdjustShowFps(DreamcastConfig& config, int direction) {
   (void)direction;
   config.show_fps = !config.show_fps;
+}
+
+void AdjustCpuDynarec(DreamcastConfig& config, int direction) {
+  (void)direction;
+  config.cpu_dynarec = !config.cpu_dynarec;
 }
 
 void AdjustAllowLargeRoms(DreamcastConfig& config, int direction) {
@@ -156,6 +165,7 @@ void AdjustStateFolder(DreamcastConfig& config, int direction) {
 constexpr SettingRow kSettings[] {
   { "Performance", PerformanceLabel, AdjustPerformance },
   { "Show FPS", ShowFpsLabel, AdjustShowFps },
+  { "CPU dynarec", CpuDynarecLabel, AdjustCpuDynarec },
   { "PVR upload", PvrDmaUploadLabel, AdjustPvrDmaUpload },
   { "Large ROMs (>8 MiB)", AllowLargeRomsLabel, AdjustAllowLargeRoms },
   { "Frame skip", FrameSkipLabel, AdjustFrameSkip },

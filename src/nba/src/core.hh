@@ -5,6 +5,7 @@
 #include <nba/scheduler.hh>
 
 #include "arm/arm7tdmi.hh"
+#include "arm/dynarec/dynarec.hh"
 #include "bus/bus.hh"
 #include "hw/apu/apu.hh"
 #include "hw/ppu/ppu.hh"
@@ -63,6 +64,7 @@ private:
   Scheduler scheduler;
 
   arm::ARM7TDMI cpu;
+  arm::dynarec::Dynarec dynarec;
   IRQ irq;
   DMA dma;
   APU apu;

@@ -317,7 +317,16 @@ The Dreamcast SH4 at 200 MHz is significantly slower than modern desktop CPUs. E
 - Performance profile (settings menu)
 - Frame skip / Auto frame skip (settings menu)
 - Audio buffer size (settings menu)
+- **CPU dynarec** (experimental; settings menu / `cpu_dynarec` in `nba-dc.toml`) — see [`DYNAREC.md`](DYNAREC.md)
 - SH4-specific compiler flags (`-m4-single-only` is already used)
+
+### ARM Dynarec (experimental)
+
+Phase 1 ships an opt-in Thumb IR recompiler (`cpu_dynarec = true`). It compiles
+basic ALU / unconditional-branch blocks and executes them through an IR path that
+still performs interpreter-equivalent pipeline fetches. Native SH4 emission is
+Phase 2. Leave this **Off** unless you are testing dynarec; Accuracy and Balanced
+profiles should keep the interpreter.
 
 ### Performance Profiles
 

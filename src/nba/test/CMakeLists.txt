@@ -18,6 +18,8 @@ add_nba_test(nba-bg-affine-test bg_affine_test.cc)
 add_nba_test(nba-bg-bitmap-test bg_bitmap_test.cc)
 add_nba_test(nba-bg-advance-test bg_advance_test.cc)
 
+add_nba_test(nba-dynarec-test dynarec_test.cc)
+
 add_test(NAME ppu-sprite-fast COMMAND nba-sprite-fast-test)
 add_test(NAME ppu-merge-fast COMMAND nba-merge-fast-test)
 add_test(NAME ppu-merge-bitmap COMMAND nba-merge-bitmap-test)
@@ -25,3 +27,4 @@ add_test(NAME ppu-bg-text COMMAND nba-bg-text-test)
 add_test(NAME ppu-bg-affine COMMAND nba-bg-affine-test)
 add_test(NAME ppu-bg-bitmap COMMAND nba-bg-bitmap-test)
 add_test(NAME ppu-bg-advance COMMAND nba-bg-advance-test)
+add_test(NAME dynarec-phase1 COMMAND nba-dynarec-test)

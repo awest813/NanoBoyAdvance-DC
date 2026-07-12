@@ -4,6 +4,9 @@
 set(SOURCES
   src/arm/tablegen/tablegen.cc
   src/arm/serialization.cc
+  src/arm/dynarec/thumb_compiler.cc
+  src/arm/dynarec/ir_exec.cc
+  src/arm/dynarec/dynarec.cc
   src/bus/bus.cc
   src/bus/io.cc
   src/bus/serialization.cc
@@ -52,6 +55,12 @@ set(HEADERS
   src/arm/tablegen/gen_thumb.hh
   src/arm/arm7tdmi.hh
   src/arm/state.hh
+  src/arm/dynarec/ir.hh
+  src/arm/dynarec/block_cache.hh
+  src/arm/dynarec/thumb_compiler.hh
+  src/arm/dynarec/ir_exec.hh
+  src/arm/dynarec/sh4_emitter.hh
+  src/arm/dynarec/dynarec.hh
   src/bus/bus.hh
   src/bus/io.hh
   src/hw/apu/channel/base_channel.hh

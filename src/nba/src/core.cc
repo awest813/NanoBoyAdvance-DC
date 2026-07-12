@@ -22,6 +22,7 @@ namespace core {
 Core::Core(std::shared_ptr<Config> config)
     : config(config)
     , cpu(scheduler, bus)
+    , dynarec(cpu)
     , irq(cpu, scheduler)
     , dma(bus, irq, scheduler)
     , apu(scheduler, dma, bus, config)
@@ -35,6 +36,7 @@ Core::Core(std::shared_ptr<Config> config)
 void Core::Reset() {
   scheduler.Reset();
   cpu.Reset();
+  dynarec.Reset();
   irq.Reset();
   dma.Reset();
   timer.Reset();
@@ -61,10 +63,12 @@ void Core::Reset() {
 
 void Core::Attach(std::vector<u8> const& bios) {
   bus.Attach(bios);
+  dynarec.InvalidateAll();
 }
 
 void Core::Attach(ROM&& rom) {
   bus.Attach(std::move(rom));
+  dynarec.InvalidateAll();
 }
 
 auto Core::CreateRTC() -> std::unique_ptr<RTC> {
@@ -107,6 +111,10 @@ void Core::Run(int cycles) {
 
         // The HLE mixer replaces SoundMainRAM(); skip the ROM routine body.
         cpu.ReturnFromSubroutine();
+        continue;
+      }
+
+      if(config->cpu_dynarec && dynarec.TryRunBlock()) {
         continue;
       }
 

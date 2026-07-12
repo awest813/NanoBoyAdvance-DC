@@ -155,6 +155,7 @@ void DreamcastConfig::LoadCustomData(toml::value const& data) {
   show_fps = toml::find_or<bool>(dreamcast, "show_fps", show_fps);
   allow_large_roms = toml::find_or<bool>(dreamcast, "allow_large_roms", allow_large_roms);
   pvr_dma_upload = toml::find_or<bool>(dreamcast, "pvr_dma_upload", pvr_dma_upload);
+  cpu_dynarec = toml::find_or<bool>(dreamcast, "cpu_dynarec", cpu_dynarec);
   rom_folder = toml::find_or<std::string>(dreamcast, "rom_folder", rom_folder);
   state_folder = toml::find_or<std::string>(dreamcast, "state_folder", state_folder);
   last_rom = toml::find_or<std::string>(dreamcast, "last_rom", last_rom);
@@ -176,6 +177,7 @@ void DreamcastConfig::SaveCustomData(toml::value& data) {
   data["dreamcast"]["show_fps"] = show_fps;
   data["dreamcast"]["allow_large_roms"] = allow_large_roms;
   data["dreamcast"]["pvr_dma_upload"] = pvr_dma_upload;
+  data["dreamcast"]["cpu_dynarec"] = cpu_dynarec;
   data["dreamcast"]["rom_folder"] = rom_folder;
   data["dreamcast"]["state_folder"] = state_folder;
   data["dreamcast"]["last_rom"] = last_rom;
