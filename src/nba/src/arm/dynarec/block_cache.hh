@@ -66,12 +66,28 @@ struct BlockCache {
     return false;
   }
 
-  // Insert or replace. On a full table, evict the probed slot (simple).
-  auto Insert(u32 key, CompiledBlock const& block) -> CompiledBlock* {
+  // Insert or replace. When a different key is overwritten (full-table eviction
+  // or same-slot replace), copies the previous block into *evicted when non-null
+  // and returns true via *did_evict.
+  auto Insert(
+    u32 key,
+    CompiledBlock const& block,
+    CompiledBlock* evicted = nullptr,
+    bool* did_evict = nullptr
+  ) -> CompiledBlock* {
+    if(did_evict) {
+      *did_evict = false;
+    }
     const u32 start = Hash(key);
     for(u32 i = 0; i < kBlockCacheCapacity; ++i) {
       auto& slot = slots_[(start + i) & (kBlockCacheCapacity - 1)];
       if(slot.key == kEmpty || slot.key == key) {
+        if(slot.key == key && evicted != nullptr) {
+          *evicted = slot.block;
+          if(did_evict) {
+            *did_evict = true;
+          }
+        }
         if(slot.key == kEmpty) {
           ++size_;
         }
@@ -81,6 +97,12 @@ struct BlockCache {
       }
     }
     auto& slot = slots_[start];
+    if(evicted != nullptr) {
+      *evicted = slot.block;
+    }
+    if(did_evict) {
+      *did_evict = true;
+    }
     slot.key = key;
     slot.block = block;
     return &slot.block;

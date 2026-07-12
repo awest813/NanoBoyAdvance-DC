@@ -302,10 +302,9 @@ auto RunGameSession(
       const auto dr = core->TakeDynarecTelemetry();
       measured_dr_invalidations = dr.invalidations;
       const u64 lookups = dr.hits + dr.misses;
+      // Only show DR when there were lookups this second (avoid "0%" while idle).
       if(lookups > 0) {
         measured_dr_pct = static_cast<int>((dr.hits * 100ull + lookups / 2) / lookups);
-      } else {
-        measured_dr_pct = 0;
       }
     }
     const double emu_ms_per_display = DCFrameTiming::Instance().EmuMsPerDisplayFrame();
@@ -467,18 +466,19 @@ auto RunGameSession(
       const int emulated_fps = static_cast<int>(
         measured_fps * static_cast<float>(active_frame_skip + 1) + 0.5f
       );
-      char fps_text[72];
+      char fps_text[80];
       if(measured_dr_pct >= 0) {
         std::snprintf(
           fps_text,
           sizeof(fps_text),
-          "FPS %5.1f EF %3d FS %s%d PG %3lu DR %3d%%",
+          "FPS %5.1f EF %3d FS %s%d PG %3lu DR %3d%% IV %lu",
           static_cast<double>(measured_fps),
           emulated_fps,
           config->auto_frame_skip ? "A" : "",
           active_frame_skip,
           static_cast<unsigned long>(measured_page_misses),
-          measured_dr_pct
+          measured_dr_pct,
+          static_cast<unsigned long>(measured_dr_invalidations)
         );
       } else {
         std::snprintf(

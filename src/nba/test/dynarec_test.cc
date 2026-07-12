@@ -390,6 +390,53 @@ void TestSmcInvalidation() {
   Expect(after_data.cache_blocks > 0, "smc: cache survives data-only poke");
 }
 
+void TestSmcEwram() {
+  const u32 entry = 0x02000100;
+  std::vector<u16> code = {
+    ThumbMovImm(0, 5),
+    ThumbAddImm(0, 1),
+    static_cast<u16>(0xE7FE),
+  };
+
+  auto dyna = MakeCore(true, entry, code);
+  dyna->Run(4000);
+  Expect(dyna->TakeDynarecTelemetry().cache_blocks > 0, "smc ewram: cache warm");
+
+  dyna->PokeHalf(entry + 2, ThumbMovImm(0, 9));
+  auto after = dyna->TakeDynarecTelemetry();
+  Expect(after.invalidations >= 1, "smc ewram: code poke invalidates");
+  Expect(after.cache_blocks == 0, "smc ewram: cache flushed");
+}
+
+void TestSmcDeferredDuringBlock() {
+  // Block stores into its own page (STRH), then loops. Flush must be deferred
+  // until the block finishes — otherwise the live IR is wiped mid-op.
+  const u32 entry = 0x03000C00;
+  // strh r1, [r0]; add r2, #1; b self
+  std::vector<u16> code = {
+    static_cast<u16>(0x8001), // STRH r1, [r0, #0]
+    ThumbAddImm(2, 1),
+    static_cast<u16>(0xE7FE),
+  };
+
+  auto dyna = MakeCore(true, entry, code);
+  nba::SaveState st{};
+  dyna->CopyState(st);
+  st.arm.regs.gpr[0] = entry;                 // store target = first insn
+  st.arm.regs.gpr[1] = ThumbMovImm(3, 0);     // harmless rewrite of entry
+  st.arm.regs.gpr[2] = 0;
+  st.arm.regs.gpr[15] = entry + 4;
+  st.arm.pipe.opcode[0] = code[0];
+  st.arm.pipe.opcode[1] = code[1];
+  dyna->LoadState(st);
+
+  dyna->Run(8000);
+  const auto snap = Capture(*dyna);
+  Expect(snap.r2 > 0, "smc defer: block completed stores without crashing");
+  auto tel = dyna->TakeDynarecTelemetry();
+  Expect(tel.invalidations >= 1, "smc defer: self-store counted as invalidation");
+}
+
 } // namespace
 
 int main() {
@@ -402,6 +449,8 @@ int main() {
   TestCondBranchVsInterpreter();
   TestArmAluVsInterpreter();
   TestSmcInvalidation();
+  TestSmcEwram();
+  TestSmcDeferredDuringBlock();
 
   if(g_failures != 0) {
     std::printf("%d failure(s)\n", g_failures);

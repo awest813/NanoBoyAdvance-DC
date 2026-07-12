@@ -91,13 +91,17 @@ interpreter.
 ### Phase 5 (SMC, telemetry, Speed A/B)
 
 - IWRAM/EWRAM stores notify a Bus hook; when the write hits a 256-byte page that
-  holds compiled code, the dynarec flushes the block cache + code arena.
-- Data-only writes to unmarked pages are a no-op (no full flush).
-- FPS overlay / runtime log show `DR N%` (block-cache hit rate) and log
-  `IV` (SMC invalidations) each second when dynarec is on.
+  holds compiled code, the dynarec schedules a cache + arena flush.
+- Flushes are **deferred to the block boundary** while `TryRunBlock` is active
+  so a live IR/native block is never wiped mid-op; cheats/`Poke*` flush eagerly.
+- Page maps use reference counts so cache eviction unmarks pages (data-only
+  writes stay a no-op).
+- FPS overlay / runtime log show `DR N%` and `IV` when dynarec had lookups that
+  second.
 - Speed profile still defaults dynarec **Off**. Opt in with
   `cpu_dynarec_on_speed = true` (settings: **DR on Speed**), or force via
-  `NBA_DC_DYNAREC=1` / `=0` for host A/B.
+  `NBA_DC_DYNAREC=1` / `=0` for host A/B. Leaving Speed clears dynarec when it
+  was armed only by that opt-in.
 
 ### Invalidation
 

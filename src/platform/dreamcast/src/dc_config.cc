@@ -32,6 +32,10 @@ void DreamcastConfig::ApplyDefaults() {
 }
 
 void DreamcastConfig::ApplyPerformanceProfile(PerformanceProfile profile) {
+  const bool leaving_speed =
+    performance_profile == PerformanceProfile::Speed &&
+    profile != PerformanceProfile::Speed;
+
   performance_profile = profile;
   auto_frame_skip = false;
 
@@ -78,6 +82,12 @@ void DreamcastConfig::ApplyPerformanceProfile(PerformanceProfile profile) {
         cpu_dynarec = true;
       }
       break;
+  }
+
+  // Speed A/B opt-in is profile-scoped: leaving Speed clears dynarec when it
+  // was armed by cpu_dynarec_on_speed. Manual CPU dynarec can be re-enabled.
+  if(leaving_speed && cpu_dynarec_on_speed) {
+    cpu_dynarec = false;
   }
 }
 

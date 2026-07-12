@@ -191,12 +191,16 @@ Configurable options:
 
 - **Performance** (`Accuracy` / `Balanced` / `Speed` — see Performance Profiles below)
 - **Show FPS** (`On` / `Off` — overlays the measured frame rate during play)
+- **CPU dynarec** (`On` / `Off` — experimental recompiler; see ARM Dynarec below)
+- **DR on Speed** (`On` / `Off` — Speed profile also enables CPU dynarec)
 - **Large ROMs** (`On` / `Off` — allows >8 MiB ROMs for 32 MB mod testing)
 - **Frame skip** (`Auto` or 0–3 extra emulated frames per display frame)
 - **Audio buffer** (2048 / 4096 / 8192 bytes — lower = less latency, higher = safer)
 - **BIOS path** (`/cd/bios.bin` or `/pc/bios.bin`)
 - **ROM folder** (`/pc/roms` or `/cd`)
 - **Save folder** (`/pc/saves`, `/pc`, or `/vmu/a1`)
+- **State folder** (`/pc/states`, `/pc`, or `/vmu/a1`)
+- **PVR upload** (`DMA` / `Copy`)
 
 Selecting a **Performance** profile rewrites the audio/video/frame-skip knobs,
 disables Auto frame skip, and applies that profile's preset; you can then
@@ -368,9 +372,10 @@ the top-left corner during play. The reading is averaged once per second by the
 frame limiter. The overlay also shows `EF` (estimated emulated frames per second,
 display FPS × (frame skip + 1)), `FS`/`FSA` for manual/automatic frame skip,
 `PG` (ROM page-cache misses since the previous FPS sample), and — when CPU
-dynarec is on — `DR` (block-cache hit rate percent). A title running at full
-speed reports ~59.7 FPS (the GBA's native rate); sustained readings below that
-indicate the SH4 cannot keep up at the current profile.
+dynarec is on and had lookups that second — `DR` (block-cache hit rate) plus
+`IV` (SMC invalidations). A title running at full speed reports ~59.7 FPS (the
+GBA's native rate); sustained readings below that indicate the SH4 cannot keep
+up at the current profile.
 
 ### Repeatable Benchmark Workflow
 
@@ -470,4 +475,3 @@ ensures compatibility with existing CD builds and multi-boot discs.
 ├── cheats/
 │   └── game.cht        # gpSP-format cheat files
 └── game_config.txt     # Idle-loop hints
-| **Broken** | Fails to boot, hangs, or has issues that prevent normal play. |

@@ -22,8 +22,10 @@ struct Dynarec {
   void Reset();
   void InvalidateAll();
 
-  // Flush the cache when a write overlaps a page that holds compiled code
-  // (IWRAM / EWRAM self-modifying code). No-op when the page has no blocks.
+  // Schedule a flush when a write overlaps a page that holds compiled code
+  // (IWRAM / EWRAM self-modifying code). Applied immediately when not inside
+  // TryRunBlock; deferred to the block boundary while a block is executing so
+  // the live CompiledBlock / IR / native buffer is not wiped mid-op.
   void InvalidateRange(u32 address, u32 size);
 
   // Try to run one compiled block at the current PC. Returns true if a block
@@ -51,14 +53,18 @@ private:
   auto LookupOrCompile(u32 pc, bool thumb) -> CompiledBlock*;
   auto ExecuteBlock(CompiledBlock& block) -> bool;
 
-  void MarkCompiledPages(CompiledBlock const& block);
+  void AdjustCompiledPages(CompiledBlock const& block, int delta);
   auto PageHasCode(u32 address, u32 size) const -> bool;
   void ClearCodePages();
+  void ApplyPendingInvalidation();
 
   ARM7TDMI& cpu_;
   BlockCache cache_;
   CodeArena arena_;
   u32 invalidations_ = 0;
+  int dispatch_depth_ = 0;
+  bool pending_invalidate_ = false;
+  // Reference counts so eviction can unmark pages without a full rebuild.
   std::array<u8, kIwramPages> iwram_code_pages_{};
   std::array<u8, kEwramPages> ewram_code_pages_{};
 };
