@@ -78,6 +78,16 @@ LDRH/STRH, ADR/ADD SP, PUSH/POP, and LDMIA/STMIA into IR. Handlers mirror
 pipeline reload on `POP {PC}`). Hi-register ops and BX still fall back to the
 interpreter.
 
+### Phase 4 (conditional branches, linking, ARM subset)
+
+- Thumb.16 `B<cond>` compiles to `CondBranch` (block ends on both taken and
+  not-taken paths).
+- Soft block linking: after a block finishes, `TryRunBlock` chains up to
+  `kMaxBlockChain` cached successors when PC matches `exit_taken` /
+  `exit_fallthrough`.
+- ARM-mode subset: data-processing (imm / reg+imm-shift) and B/B<cond>; no PC
+  operands, no BL, no memory. Pipeline fetch uses `ReadWord` in ARM mode.
+
 ### Invalidation
 
 - `InvalidateAll()` on reset, ROM attach, cheat ROM patches, and save-state load.

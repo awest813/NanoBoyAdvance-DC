@@ -47,7 +47,11 @@ auto ARM7TDMI::RunOneIrOp(dynarec::IrOp const& op) -> dynarec::IrStepResult {
   state.r15 &= ~1;
 
   pipe.opcode[0] = pipe.opcode[1];
-  pipe.opcode[1] = ReadHalf(state.r15, pipe.access);
+  if(state.cpsr.f.thumb) {
+    pipe.opcode[1] = ReadHalf(state.r15, pipe.access);
+  } else {
+    pipe.opcode[1] = ReadWord(state.r15, pipe.access);
+  }
 
   switch(op.kind) {
     case IrOpKind::MovImm: {
@@ -449,8 +453,195 @@ auto ARM7TDMI::RunOneIrOp(dynarec::IrOp const& op) -> dynarec::IrStepResult {
     }
     case IrOpKind::Branch: {
       state.r15 = op.imm;
-      ReloadPipeline16();
+      if(state.cpsr.f.thumb) {
+        ReloadPipeline16();
+      } else {
+        ReloadPipeline32();
+      }
       return IrStepResult::Done;
+    }
+    case IrOpKind::CondBranch: {
+      if(CheckCondition(static_cast<Condition>(op.aux))) {
+        state.r15 = op.imm;
+        if(state.cpsr.f.thumb) {
+          ReloadPipeline16();
+        } else {
+          ReloadPipeline32();
+        }
+      } else if(state.cpsr.f.thumb) {
+        pipe.access = Access::Code | Access::Sequential;
+        state.r15 += 2;
+      } else {
+        pipe.access = Access::Code | Access::Sequential;
+        state.r15 += 4;
+      }
+      return IrStepResult::Done;
+    }
+    case IrOpKind::ArmDataImm: {
+      if(!CheckCondition(static_cast<Condition>(op.rm))) {
+        pipe.access = Access::Code | Access::Sequential;
+        state.r15 += 4;
+        return IrStepResult::Continue;
+      }
+
+      const int opcode = op.aux & 0xF;
+      const bool set_flags = (op.aux & 0x10) != 0;
+      const int value = op.imm & 0xFF;
+      const int shift = ((op.imm >> 8) & 0xF) * 2;
+      int carry = state.cpsr.f.c;
+      u32 op2 = static_cast<u32>(value);
+      if(shift != 0) {
+        carry = (value >> (shift - 1)) & 1;
+        op2 = (op2 >> shift) | (op2 << (32 - shift));
+      }
+
+      const u32 op1 = state.reg[op.rn];
+      pipe.access = Access::Code | Access::Sequential;
+
+      switch(opcode) {
+        case 0: { // AND
+          const u32 result = op1 & op2;
+          if(set_flags) { SetZeroAndSignFlag(result); state.cpsr.f.c = carry; }
+          state.reg[op.rd] = result;
+          break;
+        }
+        case 1: { // EOR
+          const u32 result = op1 ^ op2;
+          if(set_flags) { SetZeroAndSignFlag(result); state.cpsr.f.c = carry; }
+          state.reg[op.rd] = result;
+          break;
+        }
+        case 2: // SUB
+          state.reg[op.rd] = SUB(op1, op2, set_flags);
+          break;
+        case 3: // RSB
+          state.reg[op.rd] = SUB(op2, op1, set_flags);
+          break;
+        case 4: // ADD
+          state.reg[op.rd] = ADD(op1, op2, set_flags);
+          break;
+        case 5: // ADC
+          state.reg[op.rd] = ADC(op1, op2, set_flags);
+          break;
+        case 6: // SBC
+          state.reg[op.rd] = SBC(op1, op2, set_flags);
+          break;
+        case 7: // RSC
+          state.reg[op.rd] = SBC(op2, op1, set_flags);
+          break;
+        case 8: // TST
+          SetZeroAndSignFlag(op1 & op2);
+          state.cpsr.f.c = carry;
+          break;
+        case 9: // TEQ
+          SetZeroAndSignFlag(op1 ^ op2);
+          state.cpsr.f.c = carry;
+          break;
+        case 10: // CMP
+          SUB(op1, op2, true);
+          break;
+        case 11: // CMN
+          ADD(op1, op2, true);
+          break;
+        case 12: { // ORR
+          const u32 result = op1 | op2;
+          if(set_flags) { SetZeroAndSignFlag(result); state.cpsr.f.c = carry; }
+          state.reg[op.rd] = result;
+          break;
+        }
+        case 13: { // MOV
+          if(set_flags) { SetZeroAndSignFlag(op2); state.cpsr.f.c = carry; }
+          state.reg[op.rd] = op2;
+          break;
+        }
+        case 14: { // BIC
+          const u32 result = op1 & ~op2;
+          if(set_flags) { SetZeroAndSignFlag(result); state.cpsr.f.c = carry; }
+          state.reg[op.rd] = result;
+          break;
+        }
+        case 15: { // MVN
+          const u32 result = ~op2;
+          if(set_flags) { SetZeroAndSignFlag(result); state.cpsr.f.c = carry; }
+          state.reg[op.rd] = result;
+          break;
+        }
+      }
+      state.r15 += 4;
+      return IrStepResult::Continue;
+    }
+    case IrOpKind::ArmDataReg: {
+      const int cond = (op.imm >> 8) & 0xF;
+      if(!CheckCondition(static_cast<Condition>(cond))) {
+        pipe.access = Access::Code | Access::Sequential;
+        state.r15 += 4;
+        return IrStepResult::Continue;
+      }
+
+      const int opcode = op.aux & 0xF;
+      const bool set_flags = (op.aux & 0x10) != 0;
+      const int shift_type = (op.aux >> 5) & 3;
+      const u8 shift_imm = static_cast<u8>(op.imm & 0x1F);
+      int carry = state.cpsr.f.c;
+      u32 op2 = state.reg[op.rm];
+      DoShift(shift_type, op2, shift_imm, carry, true);
+      const u32 op1 = state.reg[op.rn];
+      pipe.access = Access::Code | Access::Sequential;
+
+      switch(opcode) {
+        case 0: {
+          const u32 result = op1 & op2;
+          if(set_flags) { SetZeroAndSignFlag(result); state.cpsr.f.c = carry; }
+          state.reg[op.rd] = result;
+          break;
+        }
+        case 1: {
+          const u32 result = op1 ^ op2;
+          if(set_flags) { SetZeroAndSignFlag(result); state.cpsr.f.c = carry; }
+          state.reg[op.rd] = result;
+          break;
+        }
+        case 2: state.reg[op.rd] = SUB(op1, op2, set_flags); break;
+        case 3: state.reg[op.rd] = SUB(op2, op1, set_flags); break;
+        case 4: state.reg[op.rd] = ADD(op1, op2, set_flags); break;
+        case 5: state.reg[op.rd] = ADC(op1, op2, set_flags); break;
+        case 6: state.reg[op.rd] = SBC(op1, op2, set_flags); break;
+        case 7: state.reg[op.rd] = SBC(op2, op1, set_flags); break;
+        case 8:
+          SetZeroAndSignFlag(op1 & op2);
+          state.cpsr.f.c = carry;
+          break;
+        case 9:
+          SetZeroAndSignFlag(op1 ^ op2);
+          state.cpsr.f.c = carry;
+          break;
+        case 10: SUB(op1, op2, true); break;
+        case 11: ADD(op1, op2, true); break;
+        case 12: {
+          const u32 result = op1 | op2;
+          if(set_flags) { SetZeroAndSignFlag(result); state.cpsr.f.c = carry; }
+          state.reg[op.rd] = result;
+          break;
+        }
+        case 13:
+          if(set_flags) { SetZeroAndSignFlag(op2); state.cpsr.f.c = carry; }
+          state.reg[op.rd] = op2;
+          break;
+        case 14: {
+          const u32 result = op1 & ~op2;
+          if(set_flags) { SetZeroAndSignFlag(result); state.cpsr.f.c = carry; }
+          state.reg[op.rd] = result;
+          break;
+        }
+        case 15: {
+          const u32 result = ~op2;
+          if(set_flags) { SetZeroAndSignFlag(result); state.cpsr.f.c = carry; }
+          state.reg[op.rd] = result;
+          break;
+        }
+      }
+      state.r15 += 4;
+      return IrStepResult::Continue;
     }
     case IrOpKind::Exit:
       return IrStepResult::Done;

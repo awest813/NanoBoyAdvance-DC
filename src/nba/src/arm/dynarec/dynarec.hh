@@ -30,6 +30,9 @@ struct Dynarec {
   auto CodeBytesUsed() const -> std::size_t { return arena_.Used(); }
 
 private:
+  auto LookupOrCompile(u32 pc, bool thumb) -> CompiledBlock*;
+  auto ExecuteBlock(CompiledBlock& block) -> bool;
+
   ARM7TDMI& cpu_;
   BlockCache cache_;
   CodeArena arena_;

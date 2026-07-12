@@ -258,6 +258,90 @@ void TestSh4Codegen() {
   Expect(saw_rts, "sh4 block ends with RTS");
 }
 
+void TestCondBranchVsInterpreter() {
+  const u32 entry = 0x03000600;
+  // mov r0, #0; cmp r0, #0; beq +2 (skip mov #1); mov r1, #1; mov r1, #2; b self
+  // After beq taken: land on mov r1, #2
+  // Layout:
+  // 0: mov r0, #0
+  // 1: cmp r0, #0
+  // 2: beq +1    ; skip next insn if Z (imm=0 means +0 to r15 which is insn+4, so next next?)
+  // Thumb_ConditionalBranch: state.r15 += imm * 2 where r15 is insn_pc+4
+  // For beq to skip one insn: want target = insn_pc+4 (the insn after the skipped one)? 
+  // insn at P+4 is CondBranch. Want target = P+8 (skip one 16-bit insn at P+6).
+  // target = (P+4) + 4 + imm*2 = P+8 => imm*2 = 0 => imm=0.
+  // With imm=0: target = insn_pc+4 = P+4+4 = P+8. Yes skips one insn.
+  std::vector<u16> code = {
+    ThumbMovImm(0, 0),
+    ThumbCmpImm(0, 0),
+    static_cast<u16>(0xD000),       // beq +0 -> skip next
+    ThumbMovImm(1, 1),              // skipped
+    ThumbMovImm(1, 2),              // taken land
+    static_cast<u16>(0xE7FE),
+  };
+
+  auto interp = MakeCore(false, entry, code);
+  auto dyna = MakeCore(true, entry, code);
+  interp->Run(8000);
+  dyna->Run(8000);
+  const auto a = Capture(*interp);
+  const auto b = Capture(*dyna);
+  Expect(a.r1 == 2, "cond branch taken r1==2");
+  Expect(b.r1 == a.r1, "cond branch r1 match");
+}
+
+auto MakeArmCore(bool use_dynarec, u32 entry, std::vector<u32> const& code)
+  -> std::unique_ptr<nba::core::Core> {
+  auto config = std::make_shared<nba::Config>();
+  config->skip_bios = true;
+  config->cpu_dynarec = use_dynarec;
+  auto core = std::make_unique<nba::core::Core>(config);
+
+  for(std::size_t i = 0; i < code.size(); ++i) {
+    core->PokeWord(entry + static_cast<u32>(i * 4), code[i]);
+  }
+
+  nba::SaveState st{};
+  core->CopyState(st);
+  st.arm.regs.cpsr = 0x1F; // SYS, ARM mode (T=0)
+  for(int i = 0; i < 16; ++i) {
+    st.arm.regs.gpr[i] = 0;
+  }
+  st.arm.regs.gpr[13] = 0x03007F00;
+  st.arm.regs.gpr[15] = entry + 8;
+  st.arm.pipe.opcode[0] = code[0];
+  st.arm.pipe.opcode[1] = code.size() > 1 ? code[1] : 0;
+  st.arm.pipe.access = nba::core::Bus::Access::Code | nba::core::Bus::Access::Sequential;
+  st.bus.io.haltcnt = 0;
+  core->LoadState(st);
+  return core;
+}
+
+void TestArmAluVsInterpreter() {
+  const u32 entry = 0x03000800;
+  // MOV r0, #1 ; ADD r0, r0, #2 ; B self
+  // MOV Rd=#1, imm: cond=E, I=1, opcode=MOV(13), S=0, Rn=0, Rd=0, imm=1
+  // 0xE3A00001
+  // ADD r0,r0,#2: 0xE2800002
+  // B -2 (self): offset such that target = entry. insn_pc=entry+8 for B at entry+8?
+  // Place B at entry+8: insn_pc = entry+8, target = entry+8+8+imm<<2 = entry => imm<<2 = -16 => imm = -4 = 0xFFFFFC
+  const u32 b_self = 0xEAFFFFFE; // common B to self encoding (offset -2 words from pc+8)
+  std::vector<u32> code = {
+    0xE3A00001, // mov r0, #1
+    0xE2800002, // add r0, r0, #2
+    b_self,
+  };
+
+  auto interp = MakeArmCore(false, entry, code);
+  auto dyna = MakeArmCore(true, entry, code);
+  interp->Run(8000);
+  dyna->Run(8000);
+  const auto a = Capture(*interp);
+  const auto b = Capture(*dyna);
+  Expect(a.r0 == 3, "arm interp r0==3");
+  Expect(b.r0 == a.r0, "arm dynarec r0 match");
+}
+
 } // namespace
 
 int main() {
@@ -267,6 +351,8 @@ int main() {
   TestSh4Codegen();
   TestIrVsInterpreter();
   TestMemoryOpsVsInterpreter();
+  TestCondBranchVsInterpreter();
+  TestArmAluVsInterpreter();
 
   if(g_failures != 0) {
     std::printf("%d failure(s)\n", g_failures);
