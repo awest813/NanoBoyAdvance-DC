@@ -275,6 +275,8 @@ auto RunGameSession(
   bool rom_read_failed = false;
   float measured_fps = 0.0f;
   u32 measured_page_misses = 0;
+  int measured_dr_pct = -1;
+  u32 measured_dr_invalidations = 0;
   std::string gameplay_overlay;
   int gameplay_overlay_frames = 0;
   // One-shot discoverability hint for the Start+B pause chord.
@@ -297,6 +299,17 @@ auto RunGameSession(
   auto on_second_elapsed = [&](float fps) {
     measured_fps = fps;
     measured_page_misses = core->GetROM().TakePageMissCount();
+    measured_dr_pct = -1;
+    measured_dr_invalidations = 0;
+    if(config->cpu_dynarec) {
+      const auto dr = core->TakeDynarecTelemetry();
+      measured_dr_invalidations = dr.invalidations;
+      const u64 lookups = dr.hits + dr.misses;
+      // Only show DR when there were lookups this second (avoid "0%" while idle).
+      if(lookups > 0) {
+        measured_dr_pct = static_cast<int>((dr.hits * 100ull + lookups / 2) / lookups);
+      }
+    }
     const double emu_ms_per_display = DCFrameTiming::Instance().EmuMsPerDisplayFrame();
     DCFrameTiming::Instance().OnSecondTick();
     active_frame_skip = UpdateAutoFrameSkip(
@@ -309,14 +322,27 @@ auto RunGameSession(
     const int emulated_fps = static_cast<int>(
       measured_fps * static_cast<float>(active_frame_skip + 1) + 0.5f
     );
-    DCLog(
-      "[NBA-DC] Runtime: FPS %.1f EF %d FS %s%d PG %lu\n",
-      static_cast<double>(measured_fps),
-      emulated_fps,
-      config->auto_frame_skip ? "A" : "",
-      active_frame_skip,
-      static_cast<unsigned long>(measured_page_misses)
-    );
+    if(measured_dr_pct >= 0) {
+      DCLog(
+        "[NBA-DC] Runtime: FPS %.1f EF %d FS %s%d PG %lu DR %d%% IV %lu\n",
+        static_cast<double>(measured_fps),
+        emulated_fps,
+        config->auto_frame_skip ? "A" : "",
+        active_frame_skip,
+        static_cast<unsigned long>(measured_page_misses),
+        measured_dr_pct,
+        static_cast<unsigned long>(measured_dr_invalidations)
+      );
+    } else {
+      DCLog(
+        "[NBA-DC] Runtime: FPS %.1f EF %d FS %s%d PG %lu\n",
+        static_cast<double>(measured_fps),
+        emulated_fps,
+        config->auto_frame_skip ? "A" : "",
+        active_frame_skip,
+        static_cast<unsigned long>(measured_page_misses)
+      );
+    }
   };
 
   while(running) {
@@ -443,17 +469,32 @@ auto RunGameSession(
       const int emulated_fps = static_cast<int>(
         measured_fps * static_cast<float>(active_frame_skip + 1) + 0.5f
       );
-      char fps_text[64];
-      std::snprintf(
-        fps_text,
-        sizeof(fps_text),
-        "FPS %5.1f  EF %3d  Skip %s%d  PG %lu",
-        static_cast<double>(measured_fps),
-        emulated_fps,
-        config->auto_frame_skip ? "A" : "",
-        active_frame_skip,
-        static_cast<unsigned long>(measured_page_misses)
-      );
+      char fps_text[96];
+      if(measured_dr_pct >= 0) {
+        std::snprintf(
+          fps_text,
+          sizeof(fps_text),
+          "FPS %5.1f  EF %3d  Skip %s%d  PG %lu  DR %d%% IV %lu",
+          static_cast<double>(measured_fps),
+          emulated_fps,
+          config->auto_frame_skip ? "A" : "",
+          active_frame_skip,
+          static_cast<unsigned long>(measured_page_misses),
+          measured_dr_pct,
+          static_cast<unsigned long>(measured_dr_invalidations)
+        );
+      } else {
+        std::snprintf(
+          fps_text,
+          sizeof(fps_text),
+          "FPS %5.1f  EF %3d  Skip %s%d  PG %lu",
+          static_cast<double>(measured_fps),
+          emulated_fps,
+          config->auto_frame_skip ? "A" : "",
+          active_frame_skip,
+          static_cast<unsigned long>(measured_page_misses)
+        );
+      }
       video_device->DrawText(8, 8, fps_text);
     }
 

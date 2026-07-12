@@ -18,6 +18,14 @@ struct Config {
   // matches, the core halts until the next IRQ instead of spinning the loop.
   u32 idle_loop_eliminate_target = 0;
 
+  // Experimental ARM Thumb dynarec (Dreamcast). When true, Core::Run tries
+  // compiled IR/native blocks before falling back to the interpreter.
+  bool cpu_dynarec = false;
+
+  // When true, selecting the Dreamcast Speed performance profile also enables
+  // cpu_dynarec (A/B testing). Default off — Speed does not silently opt in.
+  bool cpu_dynarec_on_speed = false;
+
   // When true, the PPU keeps timing/IRQ/DMA state but skips scanline pixel
   // compositing and the final video-device blit.  Raster timestamps and affine
   // scroll still advance each scanline.  The Dreamcast frontend sets this on

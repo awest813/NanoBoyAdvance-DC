@@ -24,6 +24,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <memory>
 #include <string>
 
@@ -76,6 +77,29 @@ int main() {
       input,
       true
     );
+  }
+
+  // Dynarec A/B override for smoke/CI. Unset leaves config as-is.
+  if(const char* dynarec_env = std::getenv("NBA_DC_DYNAREC")) {
+    const bool enable =
+      (dynarec_env[0] == '1' && dynarec_env[1] == '\0') ||
+      std::strcmp(dynarec_env, "true") == 0 ||
+      std::strcmp(dynarec_env, "yes") == 0 ||
+      std::strcmp(dynarec_env, "on") == 0;
+    const bool disable =
+      (dynarec_env[0] == '0' && dynarec_env[1] == '\0') ||
+      std::strcmp(dynarec_env, "false") == 0 ||
+      std::strcmp(dynarec_env, "no") == 0 ||
+      std::strcmp(dynarec_env, "off") == 0;
+    if(enable) {
+      config->cpu_dynarec = true;
+      DCLog("[NBA-DC] NBA_DC_DYNAREC=%s — dynarec enabled\n", dynarec_env);
+    } else if(disable) {
+      config->cpu_dynarec = false;
+      DCLog("[NBA-DC] NBA_DC_DYNAREC=%s — dynarec disabled\n", dynarec_env);
+    } else {
+      DCLog("[NBA-DC] NBA_DC_DYNAREC=%s ignored (use 1/0, true/false, on/off)\n", dynarec_env);
+    }
   }
 
   // Autoboot via environment variable (used by host smoke tests / CI).

@@ -9,6 +9,7 @@
 
 #include "bus/bus.hh"
 #include "arm/state.hh"
+#include "arm/dynarec/ir.hh"
 
 /**
  * Some TODOs:
@@ -19,6 +20,10 @@
  */
 
 namespace nba::core::arm {
+
+namespace dynarec {
+struct Dynarec;
+} // namespace dynarec
 
 struct ARM7TDMI {
   using Access = Bus::Access;
@@ -93,6 +98,12 @@ struct ARM7TDMI {
     }
   }
 
+  // Execute a dynarec IR block. Returns false if an IRQ was taken mid-block.
+  auto RunIrBlock(dynarec::CompiledBlock const& block) -> bool;
+
+  // Execute one IR micro-op (pipeline fetch + body). Used by IR and SH4 paths.
+  auto RunOneIrOp(dynarec::IrOp const& op) -> dynarec::IrStepResult;
+
   void SwitchMode(Mode new_mode) {
     auto old_bank = GetRegisterBankByMode(state.cpsr.f.mode);
     auto new_bank = GetRegisterBankByMode(new_mode);
@@ -157,6 +168,7 @@ struct ARM7TDMI {
 
 private:
   friend struct TableGen;
+  friend struct dynarec::Dynarec;
 
   auto GetReg(int id) -> u32 {
     u32 result = state.reg[id];

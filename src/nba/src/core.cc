@@ -22,6 +22,7 @@ namespace core {
 Core::Core(std::shared_ptr<Config> config)
     : config(config)
     , cpu(scheduler, bus)
+    , dynarec(cpu)
     , irq(cpu, scheduler)
     , dma(bus, irq, scheduler)
     , apu(scheduler, dma, bus, config)
@@ -29,12 +30,18 @@ Core::Core(std::shared_ptr<Config> config)
     , timer(scheduler, irq, apu)
     , keypad(scheduler, irq)
     , bus(scheduler, {cpu, irq, dma, apu, ppu, timer, keypad}) {
+  bus.SetCodeInvalidateHook(&Core::OnCodeWrite, this);
   Reset();
+}
+
+void Core::OnCodeWrite(void* ctx, u32 address, u32 size) {
+  static_cast<Core*>(ctx)->dynarec.InvalidateRange(address, size);
 }
 
 void Core::Reset() {
   scheduler.Reset();
   cpu.Reset();
+  dynarec.Reset();
   irq.Reset();
   dma.Reset();
   timer.Reset();
@@ -61,10 +68,12 @@ void Core::Reset() {
 
 void Core::Attach(std::vector<u8> const& bios) {
   bus.Attach(bios);
+  dynarec.InvalidateAll();
 }
 
 void Core::Attach(ROM&& rom) {
   bus.Attach(std::move(rom));
+  dynarec.InvalidateAll();
 }
 
 auto Core::CreateRTC() -> std::unique_ptr<RTC> {
@@ -107,6 +116,10 @@ void Core::Run(int cycles) {
 
         // The HLE mixer replaces SoundMainRAM(); skip the ROM routine body.
         cpu.ReturnFromSubroutine();
+        continue;
+      }
+
+      if(config->cpu_dynarec && dynarec.TryRunBlock()) {
         continue;
       }
 
@@ -327,6 +340,13 @@ auto Core::GetBGVOFS(int id) -> u16 {
 
 Scheduler& Core::GetScheduler() {
   return scheduler;
+}
+
+auto Core::TakeDynarecTelemetry() -> DynarecTelemetry {
+  DynarecTelemetry out{};
+  dynarec.TakeTelemetry(out.hits, out.misses, out.invalidations);
+  out.cache_blocks = dynarec.CacheSize();
+  return out;
 }
 
 } // namespace nba::core

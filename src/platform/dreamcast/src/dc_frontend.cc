@@ -35,6 +35,14 @@ auto ShowFpsLabel(DreamcastConfig const& config) -> std::string {
   return config.show_fps ? "On" : "Off";
 }
 
+auto CpuDynarecLabel(DreamcastConfig const& config) -> std::string {
+  return config.cpu_dynarec ? "On" : "Off";
+}
+
+auto CpuDynarecOnSpeedLabel(DreamcastConfig const& config) -> std::string {
+  return config.cpu_dynarec_on_speed ? "On" : "Off";
+}
+
 auto AllowLargeRomsLabel(DreamcastConfig const& config) -> std::string {
   if(HasExtendedRAM()) {
     return "Auto (32 MB)";
@@ -95,6 +103,20 @@ void AdjustPerformance(DreamcastConfig& config, int direction) {
 void AdjustShowFps(DreamcastConfig& config, int direction) {
   (void)direction;
   config.show_fps = !config.show_fps;
+}
+
+void AdjustCpuDynarec(DreamcastConfig& config, int direction) {
+  (void)direction;
+  config.cpu_dynarec = !config.cpu_dynarec;
+}
+
+void AdjustCpuDynarecOnSpeed(DreamcastConfig& config, int direction) {
+  (void)direction;
+  config.cpu_dynarec_on_speed = !config.cpu_dynarec_on_speed;
+  if(config.performance_profile == DreamcastConfig::PerformanceProfile::Speed) {
+    // Keep the opt-in flag and the live toggle aligned while on Speed.
+    config.cpu_dynarec = config.cpu_dynarec_on_speed;
+  }
 }
 
 void AdjustAllowLargeRoms(DreamcastConfig& config, int direction) {
@@ -169,7 +191,9 @@ void AdjustStateFolder(DreamcastConfig& config, int direction) {
 
 constexpr SettingRow kSettings[] {
   { "Performance", "Accuracy / Balanced / Speed preset", PerformanceLabel, AdjustPerformance },
-  { "Show FPS", "On-screen FPS, EF, frame skip, page misses", ShowFpsLabel, AdjustShowFps },
+  { "Show FPS", "On-screen FPS, EF, frame skip, page misses, DR", ShowFpsLabel, AdjustShowFps },
+  { "CPU dynarec", "Experimental ARM recompiler (see DYNAREC.md)", CpuDynarecLabel, AdjustCpuDynarec },
+  { "DR on Speed", "Speed profile also turns CPU dynarec on", CpuDynarecOnSpeedLabel, AdjustCpuDynarecOnSpeed },
   { "PVR upload", "DMA is faster; Copy is a safer fallback", PvrDmaUploadLabel, AdjustPvrDmaUpload },
   { "Large ROMs (>8 MiB)", "Only needed for 32 MB RAM mods", AllowLargeRomsLabel, AdjustAllowLargeRoms, AllowLargeRomsDimmed },
   { "Frame skip", "Auto scales under load; 0-3 is fixed", FrameSkipLabel, AdjustFrameSkip },

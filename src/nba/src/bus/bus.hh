@@ -45,8 +45,24 @@ struct Bus {
 
   void Idle();
 
+  // Dynarec SMC hook: invoked after IWRAM/EWRAM stores. Core wires this to
+  // Dynarec::InvalidateRange without Bus depending on dynarec headers.
+  using CodeInvalidateFn = void (*)(void* ctx, u32 address, u32 size);
+  void SetCodeInvalidateHook(CodeInvalidateFn fn, void* ctx) {
+    code_invalidate_ = fn;
+    code_invalidate_ctx_ = ctx;
+  }
+
 //private:
   Scheduler& scheduler;
+  CodeInvalidateFn code_invalidate_ = nullptr;
+  void* code_invalidate_ctx_ = nullptr;
+
+  void NotifyCodeWrite(u32 address, u32 size) {
+    if(code_invalidate_ != nullptr) {
+      code_invalidate_(code_invalidate_ctx_, address, size);
+    }
+  }
 
   struct Memory {
     std::array<u8, 0x04000> bios;

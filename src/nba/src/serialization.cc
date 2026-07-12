@@ -18,6 +18,7 @@ void Core::LoadState(SaveState const& state) {
   timer.LoadState(state);
   dma.LoadState(state);
   keypad.LoadState(state);
+  dynarec.InvalidateAll();
 }
 
 void Core::CopyState(SaveState& state) {

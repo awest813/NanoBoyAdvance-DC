@@ -5,6 +5,7 @@
 #include <nba/scheduler.hh>
 
 #include "arm/arm7tdmi.hh"
+#include "arm/dynarec/dynarec.hh"
 #include "bus/bus.hh"
 #include "hw/apu/apu.hh"
 #include "hw/ppu/ppu.hh"
@@ -49,8 +50,10 @@ struct Core final : CoreBase {
   auto GetBGVOFS(int id) -> u16 override;
 
   Scheduler& GetScheduler() override;
+  auto TakeDynarecTelemetry() -> DynarecTelemetry override;
 
 private:
+  static void OnCodeWrite(void* ctx, u32 address, u32 size);
   void SkipBootScreen();
   auto SearchSoundMainRAM() -> u32;
 #if defined(PLATFORM_DREAMCAST)
@@ -63,6 +66,7 @@ private:
   Scheduler scheduler;
 
   arm::ARM7TDMI cpu;
+  arm::dynarec::Dynarec dynarec;
   IRQ irq;
   DMA dma;
   APU apu;

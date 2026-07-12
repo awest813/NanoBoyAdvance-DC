@@ -135,6 +135,22 @@ without full-ROM allocations or undefined behavior after media failures.
 - [ ] Re-measure benchmark ROMs on retail hardware after the tuning pass.
 - [ ] Fill compatibility tiers, recommended profiles, and known regressions.
 
+## Milestone 6: ARM Dynarec (Dreamcast / SH4)
+
+**Goal:** accelerate ARM Thumb execution on retail Dreamcast when the interpreter
+dominates frame time, without replacing the cycle-accurate interpreter for
+Accuracy / Balanced profiles.
+
+**Design:** [`DYNAREC.md`](DYNAREC.md)
+
+- [x] **Phase 1** — IR + Thumb ALU/branch compiler, block cache, IR executor,
+      SH4 encoder stubs, `cpu_dynarec` config + settings toggle, host unit tests
+- [x] **Phase 2** — SH4 native loop emit, code arena, I-cache flush, C helper
+      bridge (`nba_dr_run_one_op`); native entry on `__SH4__` only
+- [x] **Phase 3** — Thumb memory ops (LDR/STR/PUSH/POP/LDM/STM + ADR/ADD SP)
+- [x] **Phase 4** — Conditional branches, soft block linking, ARM ALU/B subset
+- [x] **Phase 5** — SMC invalidation; `DR` hit-rate telemetry; Speed-profile A/B
+
 ## Milestone 5: PPU / GPU Overhaul (Max Performance)
 
 **Goal:** hold ~59.7 display FPS on retail Dreamcast for heavy GBA scenes by
