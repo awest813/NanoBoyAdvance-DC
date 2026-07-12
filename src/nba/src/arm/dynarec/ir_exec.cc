@@ -204,6 +204,249 @@ auto ARM7TDMI::RunOneIrOp(dynarec::IrOp const& op) -> dynarec::IrStepResult {
       }
       return IrStepResult::Continue;
     }
+    case IrOpKind::MemPcRel: {
+      const u32 address = (state.r15 & ~2u) + op.imm;
+      pipe.access = Access::Code | Access::Nonsequential;
+      state.r15 += 2;
+      state.reg[op.rd] = ReadWord(address, Access::Nonsequential);
+      bus.Idle();
+      return IrStepResult::Continue;
+    }
+    case IrOpKind::MemOffsetReg: {
+      const u32 address = state.reg[op.rn] + state.reg[op.rm];
+      pipe.access = Access::Code | Access::Nonsequential;
+      state.r15 += 2;
+      switch(op.aux) {
+        case 0:
+          WriteWord(address, state.reg[op.rd], Access::Nonsequential);
+          break;
+        case 1:
+          WriteByte(address, static_cast<u8>(state.reg[op.rd]), Access::Nonsequential);
+          break;
+        case 2:
+          state.reg[op.rd] = ReadWordRotate(address, Access::Nonsequential);
+          bus.Idle();
+          break;
+        default:
+          state.reg[op.rd] = ReadByte(address, Access::Nonsequential);
+          bus.Idle();
+          break;
+      }
+      return IrStepResult::Continue;
+    }
+    case IrOpKind::MemSigned: {
+      const u32 address = state.reg[op.rn] + state.reg[op.rm];
+      pipe.access = Access::Code | Access::Nonsequential;
+      state.r15 += 2;
+      switch(op.aux) {
+        case 0:
+          WriteHalf(address, state.reg[op.rd], Access::Nonsequential);
+          break;
+        case 1:
+          state.reg[op.rd] = ReadByteSigned(address, Access::Nonsequential);
+          bus.Idle();
+          break;
+        case 2:
+          state.reg[op.rd] = ReadHalfRotate(address, Access::Nonsequential);
+          bus.Idle();
+          break;
+        default:
+          state.reg[op.rd] = ReadHalfSigned(address, Access::Nonsequential);
+          bus.Idle();
+          break;
+      }
+      return IrStepResult::Continue;
+    }
+    case IrOpKind::MemOffsetImm: {
+      pipe.access = Access::Code | Access::Nonsequential;
+      state.r15 += 2;
+      switch(op.aux) {
+        case 0:
+          WriteWord(state.reg[op.rn] + op.imm, state.reg[op.rd], Access::Nonsequential);
+          break;
+        case 1:
+          state.reg[op.rd] = ReadWordRotate(state.reg[op.rn] + op.imm, Access::Nonsequential);
+          bus.Idle();
+          break;
+        case 2:
+          WriteByte(state.reg[op.rn] + op.imm, static_cast<u8>(state.reg[op.rd]), Access::Nonsequential);
+          break;
+        default:
+          state.reg[op.rd] = ReadByte(state.reg[op.rn] + op.imm, Access::Nonsequential);
+          bus.Idle();
+          break;
+      }
+      return IrStepResult::Continue;
+    }
+    case IrOpKind::MemHalfImm: {
+      const u32 address = state.reg[op.rn] + op.imm;
+      pipe.access = Access::Code | Access::Nonsequential;
+      state.r15 += 2;
+      if(op.aux) {
+        state.reg[op.rd] = ReadHalfRotate(address, Access::Nonsequential);
+        bus.Idle();
+      } else {
+        WriteHalf(address, state.reg[op.rd], Access::Nonsequential);
+      }
+      return IrStepResult::Continue;
+    }
+    case IrOpKind::MemSpRel: {
+      const u32 address = state.r13 + op.imm;
+      pipe.access = Access::Code | Access::Nonsequential;
+      state.r15 += 2;
+      if(op.aux) {
+        state.reg[op.rd] = ReadWordRotate(address, Access::Nonsequential);
+        bus.Idle();
+      } else {
+        WriteWord(address, state.reg[op.rd], Access::Nonsequential);
+      }
+      return IrStepResult::Continue;
+    }
+    case IrOpKind::LoadAddress: {
+      if(op.aux) {
+        state.reg[op.rd] = state.r13 + op.imm;
+      } else {
+        state.reg[op.rd] = (state.r15 & ~2u) + op.imm;
+      }
+      pipe.access = Access::Code | Access::Sequential;
+      state.r15 += 2;
+      return IrStepResult::Continue;
+    }
+    case IrOpKind::AddSpImm: {
+      state.r13 = state.r13 + (op.aux ? -static_cast<s32>(op.imm) : static_cast<s32>(op.imm));
+      pipe.access = Access::Code | Access::Sequential;
+      state.r15 += 2;
+      return IrStepResult::Continue;
+    }
+    case IrOpKind::PushPop: {
+      const bool pop = (op.aux & 2) != 0;
+      const bool rbit = (op.aux & 1) != 0;
+      const auto list = static_cast<u16>(op.imm & 0xFF);
+
+      pipe.access = Access::Code | Access::Nonsequential;
+      state.r15 += 2;
+
+      if(list == 0 && !rbit) {
+        if(pop) {
+          state.r15 = ReadWord(state.r13, Access::Nonsequential);
+          ReloadPipeline16();
+          state.r13 += 0x40;
+          return IrStepResult::Done;
+        }
+        state.r13 -= 0x40;
+        WriteWord(state.r13, state.r15, Access::Nonsequential);
+        return IrStepResult::Continue;
+      }
+
+      auto address = state.r13;
+      auto access_type = Access::Nonsequential;
+
+      if(pop) {
+        for(int reg = 0; reg <= 7; reg++) {
+          if(list & (1 << reg)) {
+            state.reg[reg] = ReadWord(address, access_type);
+            access_type = Access::Sequential;
+            address += 4;
+          }
+        }
+
+        if(rbit) {
+          state.reg[15] = ReadWord(address, access_type) & ~1u;
+          state.r13 = address + 4;
+          bus.Idle();
+          ReloadPipeline16();
+          return IrStepResult::Done;
+        }
+
+        bus.Idle();
+        state.r13 = address;
+      } else {
+        for(int reg = 0; reg <= 7; reg++) {
+          if(list & (1 << reg)) {
+            address -= 4;
+          }
+        }
+        if(rbit) {
+          address -= 4;
+        }
+
+        state.r13 = address;
+
+        for(int reg = 0; reg <= 7; reg++) {
+          if(list & (1 << reg)) {
+            WriteWord(address, state.reg[reg], access_type);
+            access_type = Access::Sequential;
+            address += 4;
+          }
+        }
+
+        if(rbit) {
+          WriteWord(address, state.r14, access_type);
+        }
+      }
+      return IrStepResult::Continue;
+    }
+    case IrOpKind::LdmStm: {
+      const bool load = op.aux != 0;
+      const int base = op.rn;
+      const auto list = static_cast<u16>(op.imm & 0xFF);
+
+      pipe.access = Access::Code | Access::Nonsequential;
+      state.r15 += 2;
+
+      if(list == 0) {
+        if(load) {
+          state.r15 = ReadWord(state.reg[base], Access::Nonsequential);
+          ReloadPipeline16();
+        } else {
+          WriteWord(state.reg[base], state.r15, Access::Nonsequential);
+        }
+        state.reg[base] += 0x40;
+        return load ? IrStepResult::Done : IrStepResult::Continue;
+      }
+
+      if(load) {
+        u32 address = state.reg[base];
+        auto access_type = Access::Nonsequential;
+
+        for(int i = 0; i <= 7; i++) {
+          if(list & (1 << i)) {
+            state.reg[i] = ReadWord(address, access_type);
+            access_type = Access::Sequential;
+            address += 4;
+          }
+        }
+        bus.Idle();
+        if(~list & (1 << base)) {
+          state.reg[base] = address;
+        }
+      } else {
+        int count = 0;
+        int first = 0;
+
+        for(int reg = 7; reg >= 0; reg--) {
+          if(list & (1 << reg)) {
+            count++;
+            first = reg;
+          }
+        }
+
+        u32 address = state.reg[base];
+        const u32 base_new = address + count * 4;
+
+        WriteWord(address, state.reg[first], Access::Nonsequential);
+        state.reg[base] = base_new;
+        address += 4;
+
+        for(int reg = first + 1; reg <= 7; reg++) {
+          if(list & (1 << reg)) {
+            WriteWord(address, state.reg[reg], Access::Sequential);
+            address += 4;
+          }
+        }
+      }
+      return IrStepResult::Continue;
+    }
     case IrOpKind::Branch: {
       state.r15 = op.imm;
       ReloadPipeline16();

@@ -70,6 +70,14 @@ returns a `bool` to the dispatcher. `CodeArena::FlushExecutable()` issues
 Host builds still emit and size-check the SH4 machine code for CI, but
 `CompiledBlock::native` stays null because the buffer cannot be executed.
 
+### Phase 3 (Thumb memory ops)
+
+The Thumb frontend compiles LDR/STR (imm/reg/PC/SP), signed byte/half loads,
+LDRH/STRH, ADR/ADD SP, PUSH/POP, and LDMIA/STMIA into IR. Handlers mirror
+`handler16.inl` bus helpers (`ReadWordRotate`, Idle after loads, PUSH/POP
+pipeline reload on `POP {PC}`). Hi-register ops and BX still fall back to the
+interpreter.
+
 ### Invalidation
 
 - `InvalidateAll()` on reset, ROM attach, cheat ROM patches, and save-state load.

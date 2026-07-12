@@ -96,6 +96,7 @@ void TestBlockCache() {
 struct Snapshot {
   u32 r0 = 0;
   u32 r1 = 0;
+  u32 r2 = 0;
   u32 cpsr_flags = 0;
 };
 
@@ -105,6 +106,7 @@ auto Capture(nba::core::Core& core) -> Snapshot {
   Snapshot s;
   s.r0 = state.arm.regs.gpr[0];
   s.r1 = state.arm.regs.gpr[1];
+  s.r2 = state.arm.regs.gpr[2];
   s.cpsr_flags = state.arm.regs.cpsr & 0xF0000000u;
   return s;
 }
@@ -124,6 +126,7 @@ auto MakeCore(bool use_dynarec, u32 entry, std::vector<u16> const& code)
   for(int i = 0; i < 16; ++i) {
     st.arm.regs.gpr[i] = 0;
   }
+  st.arm.regs.gpr[13] = 0x03007F00;
   st.arm.regs.gpr[15] = entry + 4;
   st.arm.pipe.opcode[0] = code[0];
   st.arm.pipe.opcode[1] = code[1];
@@ -162,6 +165,55 @@ void TestIrVsInterpreter() {
   Expect(a.r0 == b.r0, "r0 match");
   Expect(a.r1 == b.r1, "r1 match");
   Expect(a.cpsr_flags == b.cpsr_flags, "NZCV match");
+}
+
+// Thumb.11 SP-relative LDR/STR, Thumb.14 PUSH/POP (no PC), Thumb.13 ADD/SUB SP
+constexpr u16 ThumbPush(u8 list, bool lr) {
+  return static_cast<u16>(0xB400 | (lr ? 0x100 : 0) | list);
+}
+constexpr u16 ThumbPop(u8 list, bool pc) {
+  return static_cast<u16>(0xBC00 | (pc ? 0x100 : 0) | list);
+}
+constexpr u16 ThumbAddSp(u8 imm7) {
+  return static_cast<u16>(0xB000 | (imm7 & 0x7F));
+}
+constexpr u16 ThumbSubSp(u8 imm7) {
+  return static_cast<u16>(0xB080 | (imm7 & 0x7F));
+}
+
+void TestMemoryOpsVsInterpreter() {
+  const u32 entry = 0x03000400;
+  // mov r0,#0x42; mov r1,#0; mov r2,#0;
+  // sub sp,#16; str r0,[sp,#0]; ldr r1,[sp,#0];
+  // push {r1}; pop {r2}; add sp,#16; b self
+  std::vector<u16> code = {
+    ThumbMovImm(0, 0x42),
+    ThumbMovImm(1, 0),
+    ThumbMovImm(2, 0),
+    ThumbSubSp(4),
+    static_cast<u16>(0x9000 | (0 << 8) | 0),
+    static_cast<u16>(0x9800 | (1 << 8) | 0),
+    ThumbPush(0x02, false),
+    ThumbPop(0x04, false),
+    ThumbAddSp(4),
+    static_cast<u16>(0xE7FE),
+  };
+
+  auto interp = MakeCore(false, entry, code);
+  auto dyna = MakeCore(true, entry, code);
+
+  interp->Run(8000);
+  dyna->Run(8000);
+
+  const auto a = Capture(*interp);
+  const auto b = Capture(*dyna);
+
+  Expect(a.r0 == 0x42, "mem interp r0");
+  Expect(a.r1 == 0x42, "mem interp r1 from LDR");
+  Expect(a.r2 == 0x42, "mem interp r2 from POP");
+  Expect(b.r0 == a.r0, "mem r0 match");
+  Expect(b.r1 == a.r1, "mem r1 match");
+  Expect(b.r2 == a.r2, "mem r2 match");
 }
 
 void TestThumbCompiler() {
@@ -214,6 +266,7 @@ int main() {
   TestThumbCompiler();
   TestSh4Codegen();
   TestIrVsInterpreter();
+  TestMemoryOpsVsInterpreter();
 
   if(g_failures != 0) {
     std::printf("%d failure(s)\n", g_failures);

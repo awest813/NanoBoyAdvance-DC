@@ -147,7 +147,7 @@ Accuracy / Balanced profiles.
       SH4 encoder stubs, `cpu_dynarec` config + settings toggle, host unit tests
 - [x] **Phase 2** — SH4 native loop emit, code arena, I-cache flush, C helper
       bridge (`nba_dr_run_one_op`); native entry on `__SH4__` only
-- [ ] **Phase 3** — Thumb memory ops via bus helpers
+- [x] **Phase 3** — Thumb memory ops (LDR/STR/PUSH/POP/LDM/STM + ADR/ADD SP)
 - [ ] **Phase 4** — Conditional branches + block linking; ARM mode subset
 - [ ] **Phase 5** — SMC invalidation; `DR` hit-rate telemetry; Speed-profile A/B
 

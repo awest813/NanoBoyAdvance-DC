@@ -322,15 +322,11 @@ The Dreamcast SH4 at 200 MHz is significantly slower than modern desktop CPUs. E
 
 ### ARM Dynarec (experimental)
 
-Phase 1 ships an opt-in Thumb IR recompiler (`cpu_dynarec = true`). It compiles
-basic ALU / unconditional-branch blocks and executes them through an IR path that
-still performs interpreter-equivalent pipeline fetches.
-
-Phase 2 adds SH4 native block dispatch on retail hardware: each cached block is
-lowered to a small SH4 loop in a fixed code arena with I-cache flush before
-execution. Per-op semantics still flow through `nba_dr_run_one_op()` until later
-phases inline hot ALU ops. Leave dynarec **Off** unless testing; Accuracy and
-Balanced profiles should keep the interpreter.
+Phase 1–3 ship an opt-in Thumb recompiler (`cpu_dynarec = true`). It compiles
+ALU / memory / unconditional-branch basic blocks to IR (and on `__SH4__` a
+native dispatch loop). Pipeline fetches and bus helpers still match the
+interpreter. Leave dynarec **Off** unless testing; Accuracy and Balanced
+profiles should keep the interpreter.
 
 ### Performance Profiles
 
