@@ -50,6 +50,9 @@ struct DCInput {
   static constexpr int kExitHintFrames = 30;
   static constexpr int kSaveStateDebounceFrames = 30;
   static constexpr int kPauseMenuDebounceFrames = 20;
+  // Hold-to-repeat for long menus: delay then ~10 Hz.
+  static constexpr int kMenuRepeatDelayFrames = 18;
+  static constexpr int kMenuRepeatRateFrames = 6;
 
   enum class Button {
     Start
@@ -67,10 +70,15 @@ private:
 #if NBA_DC_HAS_KOS
   auto ReadControllerState() const -> cont_state_t*;
   auto ButtonPressed(uint32 current, uint32 previous, uint32 mask) -> bool;
+  void UpdateAxisRepeat(bool held, bool edge, bool& out, int& hold_frames);
 
   u32 previous_buttons_ = 0xFFFF;
   s8 previous_joyx_ = 0;
   s8 previous_joyy_ = 0;
+  int hold_up_frames_ = 0;
+  int hold_down_frames_ = 0;
+  int hold_left_frames_ = 0;
+  int hold_right_frames_ = 0;
 #endif
 
   int exit_combo_frames_ = 0;

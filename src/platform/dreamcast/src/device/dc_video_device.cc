@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <cstring>
+#include <string>
 
 #include "../dc_frame_timing.hh"
 #include "../font_8x16.hh"
@@ -422,6 +423,10 @@ void DCVideoDevice::ClearScreen() {
 }
 
 void DCVideoDevice::DrawText(int x, int y, std::string_view text) {
+  DrawText(x, y, text, kFgColor);
+}
+
+void DCVideoDevice::DrawText(int x, int y, std::string_view text, u16 fg_color) {
 #if NBA_DC_HAS_KOS || NBA_DC_HAS_SDL_MENU
   RefreshFramebuffer();
 
@@ -460,7 +465,7 @@ void DCVideoDevice::DrawText(int x, int y, std::string_view text) {
           continue;
         }
 
-        PokePixel(dst_x, dst_y, (bits >> (7 - col)) & 1 ? kFgColor : kBgColor);
+        PokePixel(dst_x, dst_y, (bits >> (7 - col)) & 1 ? fg_color : kBgColor);
       }
     }
     cursor_x += kFontWidth;
@@ -469,12 +474,17 @@ void DCVideoDevice::DrawText(int x, int y, std::string_view text) {
   (void)x;
   (void)y;
   (void)text;
+  (void)fg_color;
 #endif
 }
 
 void DCVideoDevice::DrawTextCentered(int y, std::string_view text) {
+  DrawTextCentered(y, text, kFgColor);
+}
+
+void DCVideoDevice::DrawTextCentered(int y, std::string_view text, u16 fg_color) {
   const int x = std::max(0, kOffsetX + ((kGBAWidth * kScale) / 2) - (static_cast<int>(text.size()) * kFontWidth) / 2);
-  DrawText(x, y, text);
+  DrawText(x, y, text, fg_color);
 }
 
 void DCVideoDevice::DrawFilledRect(int x, int y, int width, int height, u16 color) {
@@ -539,6 +549,19 @@ void DCVideoDevice::DrawStatusBar(std::string_view text) {
 
 void DCVideoDevice::DrawOverlay(std::string_view text) {
   DrawStatusBar(text);
+}
+
+void DCVideoDevice::DrawToast(std::string_view text) {
+  constexpr size_t kMaxToastChars = 56;
+  std::string line{text};
+  if(line.size() > kMaxToastChars) {
+    line.resize(kMaxToastChars - 3);
+    line += "...";
+  }
+  const int width = static_cast<int>(line.size()) * kFontWidth + 24;
+  const int x = std::max(0, (kScreenWidth - width) / 2);
+  DrawFilledRect(x, 4, width, 24, kToastBgColor);
+  DrawText(x + 12, 8, line);
 }
 
 void DCVideoDevice::Present() {

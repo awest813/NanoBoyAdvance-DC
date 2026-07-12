@@ -277,6 +277,9 @@ auto RunGameSession(
   u32 measured_page_misses = 0;
   std::string gameplay_overlay;
   int gameplay_overlay_frames = 0;
+  // One-shot discoverability hint for the Start+B pause chord.
+  gameplay_overlay = "Hold Start+B for pause menu";
+  gameplay_overlay_frames = 180;
   int active_frame_skip = config->frame_skip;
   int auto_frame_skip_recovery_ticks = 0;
   const bool frame_timing_enabled =
@@ -440,11 +443,11 @@ auto RunGameSession(
       const int emulated_fps = static_cast<int>(
         measured_fps * static_cast<float>(active_frame_skip + 1) + 0.5f
       );
-      char fps_text[56];
+      char fps_text[64];
       std::snprintf(
         fps_text,
         sizeof(fps_text),
-        "FPS %5.1f EF %3d FS %s%d PG %3lu",
+        "FPS %5.1f  EF %3d  Skip %s%d  PG %lu",
         static_cast<double>(measured_fps),
         emulated_fps,
         config->auto_frame_skip ? "A" : "",
@@ -454,15 +457,17 @@ auto RunGameSession(
       video_device->DrawText(8, 8, fps_text);
     }
 
+    // Bottom bar: controller / exit hints only.
     if(!input.IsControllerConnected()) {
       video_device->DrawOverlay("Connect a controller");
     } else if(input.IsExitHintActive()) {
       video_device->DrawOverlay("Hold Start+A+B+X+Y to exit");
     }
 
+    // Top toast: save/load/slot feedback (does not fight the exit hint).
     if(gameplay_overlay_frames > 0) {
       const std::string overlay_line = FormatGameplayOverlay(gameplay_overlay);
-      video_device->DrawOverlay(overlay_line.c_str());
+      video_device->DrawToast(overlay_line.c_str());
       gameplay_overlay_frames--;
     }
 #endif

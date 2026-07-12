@@ -49,11 +49,15 @@ struct DCVideoDevice : VideoDevice {
 
   void ClearScreen();
   void DrawText(int x, int y, std::string_view text);
+  void DrawText(int x, int y, std::string_view text, u16 fg_color);
   void DrawTextCentered(int y, std::string_view text);
+  void DrawTextCentered(int y, std::string_view text, u16 fg_color);
   void DrawTextMultiline(int x, int y, std::string_view text);
   void DrawFilledRect(int x, int y, int width, int height, u16 color);
   void DrawStatusBar(std::string_view text);
   void DrawOverlay(std::string_view text);
+  // Top letterbox toast — does not compete with the bottom status/exit bar.
+  void DrawToast(std::string_view text);
   void Present();
 
 private:
@@ -75,6 +79,8 @@ private:
 
   static constexpr u16 kFgColor = 0xFFFF;
   static constexpr u16 kBgColor = 0x0000;
+  static constexpr u16 kDimFgColor = 0x8410;
+  static constexpr u16 kToastBgColor = 0x10A2;
 
   void RefreshFramebuffer() {
 #if NBA_DC_HAS_KOS

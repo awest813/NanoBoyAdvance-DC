@@ -16,6 +16,14 @@
 
 namespace nba {
 
+namespace {
+
+constexpr std::uint16_t kTitleRuleColor = 0x1084;
+constexpr std::uint16_t kSelectionColor = 0x3A6E; // brighter navy for CRT readability
+constexpr std::uint16_t kDimFgColor = 0x8410;
+
+} // namespace
+
 DCUI::DCUI(DCVideoDevice& video) : video_(video) {}
 
 void DCUI::ClearScreen() {
@@ -36,7 +44,7 @@ void DCUI::DrawTextMultiline(int x, int y, std::string_view text) {
 
 void DCUI::DrawTitle(std::string_view title) {
   DrawTextCentered(24, title);
-  video_.DrawFilledRect(80, 52, 480, 2, 0x1084);
+  video_.DrawFilledRect(80, 52, 480, 2, kTitleRuleColor);
 }
 
 void DCUI::DrawSplash(
@@ -65,7 +73,8 @@ void DCUI::DrawMenu(
   int selection,
   int scroll_offset,
   std::string_view status,
-  DCInput* input
+  DCInput* input,
+  std::vector<MenuItemStyle> const* styles
 ) {
   ClearScreen();
   DrawTitle(title);
@@ -74,7 +83,6 @@ void DCUI::DrawMenu(
   static constexpr int kListTop = 72;
   static constexpr int kListLeft = 40;
   static constexpr int kListWidth = 560;
-  static constexpr std::uint16_t kSelectionColor = 0x294A;
 
   const int item_count = static_cast<int>(items.size());
   if(item_count > 0) {
@@ -88,24 +96,32 @@ void DCUI::DrawMenu(
     const int index = scroll_offset + row;
     const int y = kListTop + row * kRowHeight;
     const bool selected = index == selection;
+    const bool dim =
+      styles != nullptr &&
+      index < static_cast<int>(styles->size()) &&
+      (*styles)[static_cast<size_t>(index)] == MenuItemStyle::Dim;
 
     if(selected) {
       video_.DrawFilledRect(kListLeft, y - 2, kListWidth, kRowHeight, kSelectionColor);
     }
 
-    const char* prefix = selected ? "> " : "  ";
+    const char* prefix = selected ? "> " : (dim ? "- " : "  ");
     std::string line = TruncateText(std::string{prefix} + items[index], kMenuMaxChars);
-    DrawText(kMenuTextX, y, line);
+    if(dim && !selected) {
+      video_.DrawText(kMenuTextX, y, line, kDimFgColor);
+    } else {
+      DrawText(kMenuTextX, y, line);
+    }
   }
 
   if(item_count == 0) {
     DrawTextCentered(kListTop, "No items found");
   } else {
     if(scroll_offset > 0) {
-      DrawText(520, kListTop - 18, "^");
+      DrawTextCentered(kListTop - 20, "^ more");
     }
     if(scroll_offset + kMenuVisibleRows < item_count) {
-      DrawText(520, kListTop + kMenuVisibleRows * kRowHeight - 6, "v");
+      DrawTextCentered(kListTop + kMenuVisibleRows * kRowHeight + 2, "v more");
     }
 
     if(item_count > 1) {
@@ -136,6 +152,10 @@ void DCUI::DrawOverlay(std::string_view text) {
   video_.DrawOverlay(text);
 }
 
+void DCUI::DrawToast(std::string_view text) {
+  video_.DrawToast(text);
+}
+
 void DCUI::Present() {
   video_.Present();
 }
@@ -149,6 +169,7 @@ void DCUI::ShowBriefBanner(
   ClearScreen();
   DrawTitle(title);
   DrawTextCentered(120, message);
+  DrawStatusBar("Press A/B/Start to skip");
   Present();
 
   for(int frame = 0; frame < max_frames; frame++) {
@@ -177,7 +198,7 @@ void DCUI::ShowMessage(
   DrawTextMultiline(48, 96, message);
 
   if(wait_for_start) {
-    DrawStatusBar("Press Start or B to continue");
+    DrawStatusBar("Press A, Start, or B to continue");
   }
 
   Present();
@@ -189,7 +210,7 @@ void DCUI::ShowMessage(
   while(true) {
     DCMenuInput menu;
     input.PollMenu(menu);
-    if(menu.start || menu.cancel) {
+    if(menu.start || menu.cancel || menu.confirm) {
       break;
     }
 
@@ -211,6 +232,36 @@ void DCUI::ShowMessage(
 
 void DCUI::ShowFatalError(std::string_view message, DCInput& input) {
   ShowMessage("Error", message, input, true);
+}
+
+auto DCUI::ConfirmAction(
+  std::string_view title,
+  std::string_view prompt,
+  DCInput& input
+) -> bool {
+  std::vector<std::string> items{"No", "Yes"};
+  int selection = 0;
+
+  while(true) {
+    DrawMenu(title, items, selection, 0, prompt, &input);
+
+    DCMenuInput menu;
+    input.PollMenu(menu);
+
+    if(menu.up || menu.down) {
+      selection ^= 1;
+    } else if(menu.confirm) {
+      return selection == 1;
+    } else if(menu.cancel) {
+      return false;
+    }
+
+#if NBA_DC_HAS_KOS
+    vid_waitvbl();
+#elif NBA_DC_HAS_SDL_MENU
+    SDL_Delay(16);
+#endif
+  }
 }
 
 } // namespace nba

@@ -5,6 +5,7 @@
 
 #include "dc_paths.hh"
 
+#include <platform/loader/dc_virtual_fs.hh>
 #include <platform/loader/save_state.hh>
 #include <platform/writer/save_state.hh>
 
@@ -24,7 +25,6 @@ enum class PauseRow {
   Resume,
   SaveState,
   LoadState,
-  StateSlot,
   Cheats,
   Controls,
   Reset,
@@ -32,46 +32,16 @@ enum class PauseRow {
   Count
 };
 
-// Modal yes/no prompt used for actions that discard progress (reset, exit).
-// Defaults the selection to "No" so a stray A press cannot drop the session.
-auto ConfirmAction(
-  DCUI& ui,
-  DCInput& input,
-  std::string_view title,
-  std::string_view prompt
-) -> bool {
-  std::vector<std::string> items{"No", "Yes"};
-  int selection = 0;
-
-  while(true) {
-    ui.DrawMenu(title, items, selection, 0, prompt, &input);
-
-    DCMenuInput menu;
-    input.PollMenu(menu);
-
-    if(menu.up || menu.down) {
-      selection ^= 1;
-    } else if(menu.confirm) {
-      return selection == 1;
-    } else if(menu.cancel) {
-      return false;
-    }
-
-#if NBA_DC_HAS_KOS
-    vid_waitvbl();
-#endif
-  }
-}
-
 auto ShowControlsHelp(DCUI& ui, DCInput& input) -> void {
   ui.ShowMessage(
     "Controls",
     "In-game shortcuts:\n\n"
-    "Start + B        Pause menu\n"
-    "X + Y + Start    Quick save\n"
-    "X + Y + Select   Quick load\n"
+    "Start + B           Pause menu\n"
+    "X + Y + Start       Quick save\n"
+    "X + Y + Select      Quick load\n"
     "X + Y + Left/Right  Change slot\n"
-    "Start+A+B+X+Y   Exit (hold)",
+    "Start+A+B+X+Y       Exit (hold)\n\n"
+    "X/Y are GBA L/R on Dreamcast.",
     input,
     true
   );
@@ -140,13 +110,28 @@ auto LoadStateMessage(
   return DescribeSaveStateLoadResult(result);
 }
 
+auto StateSlotOccupied(
+  DreamcastConfig const& config,
+  fs::path const& rom_path,
+  int slot
+) -> bool {
+  const auto state_path = GetSaveStatePath(config, rom_path, slot);
+  size_t size = 0;
+  return GetDreamcastVirtualFileSize(state_path, size) && size > 0;
+}
+
 auto RunCheatMenu(
   DCUI& ui,
   DCInput& input,
   DCCheatDatabase& cheats
 ) -> void {
   if(cheats.empty()) {
-    ui.ShowMessage("Cheats", "No .cht file found for\nthis ROM.\n\nPlace <rom>.cht next\nto the ROM or in\n/cd/gbaDC/.", input, true);
+    ui.ShowMessage(
+      "Cheats",
+      "No .cht file found for\nthis ROM.\n\nPlace <rom>.cht next\nto the ROM or in\n/cd/gbaDC/.",
+      input,
+      true
+    );
     return;
   }
 
@@ -210,21 +195,32 @@ auto RunCheatMenu(
 
 auto BuildPauseMenuItems(
   DreamcastConfig const& config,
-  DCCheatDatabase const& cheats
+  DCCheatDatabase const& cheats,
+  fs::path const& rom_path
 ) -> std::vector<std::string> {
   std::vector<std::string> items;
   items.reserve(static_cast<size_t>(PauseRow::Count));
 
   items.emplace_back("Resume");
 
-  char slot_line[48];
-  std::snprintf(slot_line, sizeof(slot_line), "Save state (slot %d)", config.save_state_slot);
+  const bool occupied = StateSlotOccupied(config, rom_path, config.save_state_slot);
+  char slot_line[56];
+  std::snprintf(
+    slot_line,
+    sizeof(slot_line),
+    "Save state  slot %d [%s]",
+    config.save_state_slot,
+    occupied ? "saved" : "empty"
+  );
   items.emplace_back(slot_line);
 
-  std::snprintf(slot_line, sizeof(slot_line), "Load state (slot %d)", config.save_state_slot);
-  items.emplace_back(slot_line);
-
-  std::snprintf(slot_line, sizeof(slot_line), "State slot: %d", config.save_state_slot);
+  std::snprintf(
+    slot_line,
+    sizeof(slot_line),
+    "Load state  slot %d [%s]",
+    config.save_state_slot,
+    occupied ? "saved" : "empty"
+  );
   items.emplace_back(slot_line);
 
   if(cheats.empty()) {
@@ -239,6 +235,17 @@ auto BuildPauseMenuItems(
   return items;
 }
 
+auto BuildPauseStyles(DCCheatDatabase const& cheats) -> std::vector<MenuItemStyle> {
+  std::vector<MenuItemStyle> styles(
+    static_cast<size_t>(PauseRow::Count),
+    MenuItemStyle::Normal
+  );
+  if(cheats.empty()) {
+    styles[static_cast<size_t>(PauseRow::Cheats)] = MenuItemStyle::Dim;
+  }
+  return styles;
+}
+
 auto BuildPauseTitle(fs::path const& rom_path) -> std::string {
   std::string name = rom_path.filename().string();
   const auto semicolon = name.rfind(';');
@@ -247,6 +254,14 @@ auto BuildPauseTitle(fs::path const& rom_path) -> std::string {
   }
 
   return "Paused: " + TruncateText(name, 36);
+}
+
+auto AdjustSaveSlot(DreamcastConfig& config, int direction) -> void {
+  config.save_state_slot = std::clamp(
+    config.save_state_slot + direction,
+    0,
+    DreamcastConfig::kSaveStateSlotCount - 1
+  );
 }
 
 } // namespace
@@ -282,12 +297,13 @@ auto DCGameplayMenu::Run(
   const auto pause_title = BuildPauseTitle(rom_path);
 
   while(true) {
-    auto items = BuildPauseMenuItems(config, cheats);
+    auto items = BuildPauseMenuItems(config, cheats, rom_path);
+    auto styles = BuildPauseStyles(cheats);
     const auto status = status_frames > 0
       ? std::string_view{status_message}
-      : std::string_view{"A=Select  B=Resume  Left/Right=Adjust slot"};
+      : std::string_view{"A=Select  B=Resume  Left/Right=Slot on Save/Load"};
     SyncMenuScrollOffset(selection, scroll_offset);
-    ui.DrawMenu(pause_title, items, selection, scroll_offset, status, &input);
+    ui.DrawMenu(pause_title, items, selection, scroll_offset, status, &input, &styles);
     if(status_frames > 0) {
       status_frames--;
     }
@@ -300,18 +316,12 @@ auto DCGameplayMenu::Run(
         static_cast<int>(PauseRow::Count);
     } else if(menu.down) {
       selection = (selection + 1) % static_cast<int>(PauseRow::Count);
-    } else if(menu.left && selection == static_cast<int>(PauseRow::StateSlot)) {
-      config.save_state_slot = std::clamp(
-        config.save_state_slot - 1,
-        0,
-        DreamcastConfig::kSaveStateSlotCount - 1
-      );
-    } else if(menu.right && selection == static_cast<int>(PauseRow::StateSlot)) {
-      config.save_state_slot = std::clamp(
-        config.save_state_slot + 1,
-        0,
-        DreamcastConfig::kSaveStateSlotCount - 1
-      );
+    } else if(
+      (menu.left || menu.right) &&
+      (selection == static_cast<int>(PauseRow::SaveState) ||
+       selection == static_cast<int>(PauseRow::LoadState))
+    ) {
+      AdjustSaveSlot(config, menu.left ? -1 : 1);
     } else if(menu.confirm) {
       switch(static_cast<PauseRow>(selection)) {
         case PauseRow::Resume:
@@ -339,9 +349,6 @@ auto DCGameplayMenu::Run(
           break;
         }
 
-        case PauseRow::StateSlot:
-          break;
-
         case PauseRow::Cheats:
           RunCheatMenu(ui, input, cheats);
           break;
@@ -351,12 +358,11 @@ auto DCGameplayMenu::Run(
           break;
 
         case PauseRow::Reset:
-          if(ConfirmAction(
-              ui,
-              input,
-              "Reset game?",
-              "Unsaved progress is lost  A=Confirm  B=Cancel"
-          )) {
+          if(ui.ConfirmAction(
+               "Reset game?",
+               "Unsaved progress is lost  A=Confirm  B=Cancel",
+               input
+             )) {
             core->Reset();
             status_message = "Game reset";
             status_frames = 90;
@@ -364,12 +370,11 @@ auto DCGameplayMenu::Run(
           break;
 
         case PauseRow::ExitToBrowser:
-          if(ConfirmAction(
-              ui,
-              input,
-              "Exit to browser?",
-              "Saves are flushed on exit  A=Confirm  B=Cancel"
-          )) {
+          if(ui.ConfirmAction(
+               "Exit to browser?",
+               "Saves are flushed on exit  A=Confirm  B=Cancel",
+               input
+             )) {
             return Action::ExitToBrowser;
           }
           break;

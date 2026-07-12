@@ -29,6 +29,25 @@ auto DCInput::ButtonPressed(uint32 current, uint32 previous, uint32 mask) -> boo
   return (current & mask) && !(previous & mask);
 }
 
+void DCInput::UpdateAxisRepeat(bool held, bool edge, bool& out, int& hold_frames) {
+  if(!held) {
+    hold_frames = 0;
+    return;
+  }
+
+  if(edge) {
+    hold_frames = 1;
+    out = true;
+    return;
+  }
+
+  ++hold_frames;
+  if(hold_frames >= kMenuRepeatDelayFrames &&
+     ((hold_frames - kMenuRepeatDelayFrames) % kMenuRepeatRateFrames) == 0) {
+    out = true;
+  }
+}
+
 static auto IsInvalidControllerState(cont_state_t const* state) -> bool {
   // Flycast can report every digital button bit set when no usable keyboard
   // or controller mapping is active.  Treat that impossible menu state as
@@ -205,6 +224,10 @@ auto DCInput::PollMenu(DCMenuInput& menu) -> void {
     previous_buttons_ = 0xFFFF;
     previous_joyx_ = 0;
     previous_joyy_ = 0;
+    hold_up_frames_ = 0;
+    hold_down_frames_ = 0;
+    hold_left_frames_ = 0;
+    hold_right_frames_ = 0;
     return;
   }
 
@@ -234,10 +257,25 @@ auto DCInput::PollMenu(DCMenuInput& menu) -> void {
   const bool prev_analog_left = previous_joyx_ < -kAnalogDeadZone;
   const bool prev_analog_right = previous_joyx_ > kAnalogDeadZone;
 
-  menu.up |= analog_up && !prev_analog_up;
-  menu.down |= analog_down && !prev_analog_down;
-  menu.left |= analog_left && !prev_analog_left;
-  menu.right |= analog_right && !prev_analog_right;
+  const bool edge_up = menu.up || (analog_up && !prev_analog_up);
+  const bool edge_down = menu.down || (analog_down && !prev_analog_down);
+  const bool edge_left = menu.left || (analog_left && !prev_analog_left);
+  const bool edge_right = menu.right || (analog_right && !prev_analog_right);
+
+  menu.up = false;
+  menu.down = false;
+  menu.left = false;
+  menu.right = false;
+
+  const bool held_up = (current & CONT_DPAD_UP) || analog_up;
+  const bool held_down = (current & CONT_DPAD_DOWN) || analog_down;
+  const bool held_left = (current & CONT_DPAD_LEFT) || analog_left;
+  const bool held_right = (current & CONT_DPAD_RIGHT) || analog_right;
+
+  UpdateAxisRepeat(held_up, edge_up, menu.up, hold_up_frames_);
+  UpdateAxisRepeat(held_down, edge_down, menu.down, hold_down_frames_);
+  UpdateAxisRepeat(held_left, edge_left, menu.left, hold_left_frames_);
+  UpdateAxisRepeat(held_right, edge_right, menu.right, hold_right_frames_);
 
   previous_buttons_ = current;
   previous_joyx_ = state->joyx;

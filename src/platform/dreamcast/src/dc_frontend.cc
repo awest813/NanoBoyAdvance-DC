@@ -21,8 +21,10 @@ namespace {
 
 struct SettingRow {
   const char* label;
+  const char* help;
   std::string (*getter)(DreamcastConfig const&);
   void (*adjust)(DreamcastConfig&, int direction);
+  bool (*is_dimmed)(DreamcastConfig const&) = nullptr;
 };
 
 auto PerformanceLabel(DreamcastConfig const& config) -> std::string {
@@ -41,16 +43,25 @@ auto AllowLargeRomsLabel(DreamcastConfig const& config) -> std::string {
   return config.allow_large_roms ? "On" : "Off";
 }
 
+auto AllowLargeRomsDimmed(DreamcastConfig const& config) -> bool {
+  (void)config;
+  return HasExtendedRAM();
+}
+
 auto FrameSkipLabel(DreamcastConfig const& config) -> std::string {
   if(config.auto_frame_skip) {
-    return std::string{"Auto ("} + std::to_string(config.frame_skip) + ")";
+    return "Auto";
   }
 
   return std::to_string(config.frame_skip);
 }
 
 auto AudioBufferLabel(DreamcastConfig const& config) -> std::string {
-  return std::to_string(config.audio_buffer_size);
+  switch(config.audio_buffer_size) {
+    case 2048: return "Small (2 KiB)";
+    case 8192: return "Large (8 KiB)";
+    default:   return "Medium (4 KiB)";
+  }
 }
 
 auto BiosPathLabel(DreamcastConfig const& config) -> std::string {
@@ -89,14 +100,13 @@ void AdjustShowFps(DreamcastConfig& config, int direction) {
 void AdjustAllowLargeRoms(DreamcastConfig& config, int direction) {
   (void)direction;
   if(HasExtendedRAM()) {
-    // Label is "Auto (32 MB)"; the toggle has no effect on extended RAM.
     return;
   }
   config.allow_large_roms = !config.allow_large_roms;
 }
 
 auto PvrDmaUploadLabel(DreamcastConfig const& config) -> std::string {
-  return config.pvr_dma_upload ? "DMA" : "Copy";
+  return config.pvr_dma_upload ? "DMA (faster)" : "Copy (safer)";
 }
 
 void AdjustPvrDmaUpload(DreamcastConfig& config, int direction) {
@@ -158,16 +168,16 @@ void AdjustStateFolder(DreamcastConfig& config, int direction) {
 }
 
 constexpr SettingRow kSettings[] {
-  { "Performance", PerformanceLabel, AdjustPerformance },
-  { "Show FPS", ShowFpsLabel, AdjustShowFps },
-  { "PVR upload", PvrDmaUploadLabel, AdjustPvrDmaUpload },
-  { "Large ROMs (>8 MiB)", AllowLargeRomsLabel, AdjustAllowLargeRoms },
-  { "Frame skip", FrameSkipLabel, AdjustFrameSkip },
-  { "Audio buffer", AudioBufferLabel, AdjustAudioBuffer },
-  { "BIOS path", BiosPathLabel, AdjustBiosPath },
-  { "Primary ROM folder", ROMFolderLabel, AdjustROMFolder },
-  { "Save folder", SaveFolderLabel, AdjustSaveFolder },
-  { "State folder", StateFolderLabel, AdjustStateFolder }
+  { "Performance", "Accuracy / Balanced / Speed preset", PerformanceLabel, AdjustPerformance },
+  { "Show FPS", "On-screen FPS, EF, frame skip, page misses", ShowFpsLabel, AdjustShowFps },
+  { "PVR upload", "DMA is faster; Copy is a safer fallback", PvrDmaUploadLabel, AdjustPvrDmaUpload },
+  { "Large ROMs (>8 MiB)", "Only needed for 32 MB RAM mods", AllowLargeRomsLabel, AdjustAllowLargeRoms, AllowLargeRomsDimmed },
+  { "Frame skip", "Auto scales under load; 0-3 is fixed", FrameSkipLabel, AdjustFrameSkip },
+  { "Audio buffer", "Smaller = less latency; larger = safer", AudioBufferLabel, AdjustAudioBuffer },
+  { "BIOS path", "GBA BIOS file location", BiosPathLabel, AdjustBiosPath },
+  { "Primary ROM folder", "First folder scanned for games", ROMFolderLabel, AdjustROMFolder },
+  { "Save folder", "SRAM/FLASH/EEPROM save location", SaveFolderLabel, AdjustSaveFolder },
+  { "State folder", "Save-state file location", StateFolderLabel, AdjustStateFolder }
 };
 
 auto BuildMenuItems(std::vector<ROMEntry> const& entries) -> std::vector<std::string> {
@@ -181,15 +191,41 @@ auto BuildMenuItems(std::vector<ROMEntry> const& entries) -> std::vector<std::st
   return items;
 }
 
+auto BuildMenuStyles(std::vector<ROMEntry> const& entries) -> std::vector<MenuItemStyle> {
+  std::vector<MenuItemStyle> styles;
+  styles.reserve(entries.size());
+  for(auto const& entry : entries) {
+    styles.push_back(entry.launchable ? MenuItemStyle::Normal : MenuItemStyle::Dim);
+  }
+  return styles;
+}
+
 auto BuildRomBrowserStatus(DreamcastConfig const& config) -> std::string {
   char buffer[96];
   std::snprintf(
     buffer,
     sizeof(buffer),
-    "A=Launch  B=Loader  Y=Settings  |  %s",
+    "A=Launch  B=Back  Y=Settings  |  %s",
     DreamcastConfig::ProfileName(config.performance_profile)
   );
   return buffer;
+}
+
+auto SettingsDirty(DreamcastConfig const& draft, DreamcastConfig const& saved) -> bool {
+  return draft.performance_profile != saved.performance_profile ||
+         draft.show_fps != saved.show_fps ||
+         draft.pvr_dma_upload != saved.pvr_dma_upload ||
+         draft.allow_large_roms != saved.allow_large_roms ||
+         draft.frame_skip != saved.frame_skip ||
+         draft.auto_frame_skip != saved.auto_frame_skip ||
+         draft.audio_buffer_size != saved.audio_buffer_size ||
+         draft.bios_path != saved.bios_path ||
+         draft.rom_folder != saved.rom_folder ||
+         draft.save_folder != saved.save_folder ||
+         draft.state_folder != saved.state_folder ||
+         draft.audio.mp2k_hle_enable != saved.audio.mp2k_hle_enable ||
+         draft.ppu_fast_mode != saved.ppu_fast_mode ||
+         draft.skip_bios != saved.skip_bios;
 }
 
 } // namespace
@@ -206,22 +242,31 @@ auto DCSettingsMenu::Run(
 
   while(true) {
     std::vector<std::string> items;
+    std::vector<MenuItemStyle> styles;
     items.reserve(item_count + 1);
+    styles.reserve(item_count + 1);
 
     for(auto const& setting : kSettings) {
       items.push_back(std::string{setting.label} + ": " + setting.getter(draft));
+      const bool dim = setting.is_dimmed && setting.is_dimmed(draft);
+      styles.push_back(dim ? MenuItemStyle::Dim : MenuItemStyle::Normal);
     }
     items.emplace_back("Save and return");
+    styles.push_back(MenuItemStyle::Normal);
 
     SyncMenuScrollOffset(selection, scroll_offset);
 
     char status[96];
-    std::snprintf(
-      status,
-      sizeof(status),
-      "Left/Right=Adjust  A=Save on last row  B=Cancel  |  %s",
-      DreamcastConfig::ProfileName(draft.performance_profile)
-    );
+    if(selection < item_count) {
+      std::snprintf(status, sizeof(status), "%s", kSettings[selection].help);
+    } else {
+      std::snprintf(
+        status,
+        sizeof(status),
+        "A=Save  B=Cancel  |  %s",
+        DreamcastConfig::ProfileName(draft.performance_profile)
+      );
+    }
 
     ui.DrawMenu(
       "Settings",
@@ -229,7 +274,8 @@ auto DCSettingsMenu::Run(
       selection,
       scroll_offset,
       status,
-      &input
+      &input,
+      &styles
     );
 
     DCMenuInput menu;
@@ -265,6 +311,15 @@ auto DCSettingsMenu::Run(
         );
       }
     } else if(menu.cancel) {
+      if(SettingsDirty(draft, config)) {
+        if(!ui.ConfirmAction(
+             "Discard changes?",
+             "Unsaved settings will be lost  A=Confirm  B=Keep editing",
+             input
+           )) {
+          continue;
+        }
+      }
       return false;
     }
 
@@ -283,43 +338,48 @@ auto DCFrontend::Run(
   std::vector<ROMEntry> const& entries
 ) -> Result {
   if(entries.empty()) {
-    ui.ShowMessage(
-      "No ROMs Found",
-      "Place .gba files in /pc/roms,\n/cd, or /cd/gbaDC.\n\n"
-      "Press Start/Y for settings.\nPress B to return to loader.",
-      input,
-      false
-    );
-
+    int selection = 0;
     while(true) {
+      std::vector<std::string> items{
+        "Open Settings",
+        "Rescan library",
+        "Return to loader"
+      };
+      ui.DrawMenu(
+        "No ROMs Found",
+        items,
+        selection,
+        0,
+        "Place .gba files in /pc/roms, /cd, or /cd/gbaDC",
+        &input
+      );
+
       DCMenuInput menu;
       input.PollMenu(menu);
-      if(menu.start) {
-        if(DCSettingsMenu::Run(ui, input, config)) {
-          return Result{Action::OpenSettings, {}};
-        }
 
-        ui.ShowMessage(
-          "No ROMs Found",
-          "Place .gba files in /pc/roms,\n/cd, or /cd/gbaDC.\n\n"
-          "Press Start/Y for settings.\nPress B to return to loader.",
-          input,
-          false
-        );
-      }
-      if(menu.settings) {
+      if(menu.up) {
+        selection = (selection + 2) % 3;
+      } else if(menu.down) {
+        selection = (selection + 1) % 3;
+      } else if(menu.confirm) {
+        switch(selection) {
+          case 0:
+            if(DCSettingsMenu::Run(ui, input, config)) {
+              return Result{Action::OpenSettings, {}};
+            }
+            break;
+          case 1:
+            return Result{Action::OpenSettings, {}}; // main loop rescans
+          case 2:
+            return Result{Action::ReturnToLoader, {}};
+          default:
+            break;
+        }
+      } else if(menu.settings) {
         if(DCSettingsMenu::Run(ui, input, config)) {
           return Result{Action::OpenSettings, {}};
         }
-        ui.ShowMessage(
-          "No ROMs Found",
-          "Place .gba files in /pc/roms,\n/cd, or /cd/gbaDC.\n\n"
-          "Press Start/Y for settings.\nPress B to return to loader.",
-          input,
-          false
-        );
-      }
-      if(menu.cancel) {
+      } else if(menu.cancel || menu.start) {
         return Result{Action::ReturnToLoader, {}};
       }
 
@@ -330,6 +390,7 @@ auto DCFrontend::Run(
   }
 
   auto menu_items = BuildMenuItems(entries);
+  auto menu_styles = BuildMenuStyles(entries);
   int selection = 0;
   int scroll_offset = 0;
 
@@ -344,7 +405,7 @@ auto DCFrontend::Run(
 
   SyncMenuScrollOffset(selection, scroll_offset);
 
-  char rom_title[32];
+  char rom_title[40];
   std::snprintf(
     rom_title,
     sizeof(rom_title),
@@ -361,7 +422,8 @@ auto DCFrontend::Run(
       selection,
       scroll_offset,
       browser_status,
-      &input
+      &input,
+      &menu_styles
     );
 
     DCMenuInput menu;

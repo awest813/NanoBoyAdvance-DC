@@ -182,32 +182,35 @@ cache is undersized for the current game.
 
 | Button | Action |
 |--------|--------|
-| D-Pad Up/Down | Select row |
+| D-Pad Up/Down | Select row (hold to scroll faster) |
 | D-Pad Left/Right | Adjust value |
 | A | Save and return (on last row) |
-| B | Cancel without saving |
+| B | Cancel (confirms if there are unsaved changes) |
+
+The status bar shows a short description of the highlighted option.
 
 Configurable options:
 
 - **Performance** (`Accuracy` / `Balanced` / `Speed` — see Performance Profiles below)
-- **Show FPS** (`On` / `Off` — overlays the measured frame rate during play)
-- **Large ROMs** (`On` / `Off` — allows >8 MiB ROMs for 32 MB mod testing)
+- **Show FPS** (`On` / `Off` — overlays FPS / EF / Skip / PG during play)
+- **PVR upload** (`DMA` / `Copy` — texture upload path)
+- **Large ROMs** (`On` / `Off` — allows >8 MiB ROMs for 32 MB mod testing; Auto on 32 MB)
 - **Frame skip** (`Auto` or 0–3 extra emulated frames per display frame)
-- **Audio buffer** (2048 / 4096 / 8192 bytes — lower = less latency, higher = safer)
+- **Audio buffer** (Small / Medium / Large — lower = less latency, higher = safer)
 - **BIOS path** (`/cd/bios.bin` or `/pc/bios.bin`)
 - **ROM folder** (`/pc/roms` or `/cd`)
 - **Save folder** (`/pc/saves`, `/pc`, or `/vmu/a1`)
+- **State folder** (`/pc/states`, `/pc`, or `/vmu/a1`)
 
-Selecting a **Performance** profile rewrites the audio/video/frame-skip knobs,
-disables Auto frame skip, and applies that profile's preset; you can then
-fine-tune Frame skip and Audio buffer afterward without losing the rest of the
-preset.
+Selecting a **Performance** profile rewrites the audio/video/frame-skip knobs
+and applies that profile's preset; you can then fine-tune Frame skip and Audio
+buffer afterward without losing the rest of the preset.
 
 When **Frame skip** is set to **Auto**, the runtime raises the active skip value
 when measured FPS drops below the full-speed target and slowly lowers it after
 several stable samples. On the **Speed** profile, auto frame skip reacts one FPS
 point sooner and recovers after two stable samples instead of three. The FPS
-overlay shows this as `FSA<n>`; manual mode is shown as `FS <n>`.
+overlay shows this as `Skip A<n>`; manual mode is shown as `Skip <n>`.
 
 ### Settings Persistence
 
@@ -245,7 +248,13 @@ overlay shows this as `FSA<n>`; manual mode is shown as `FS <n>`.
 
 **Exit combo during gameplay**: Hold Start + A + B + X + Y for ~1 second to return to the ROM browser.
 
-**Pause menu**: Hold **Start + B** for ~⅓ second to open the in-game pause menu. From there you can resume, save/load states, pick a slot, toggle cheats, view the **Controls** help screen, **Reset game**, or exit to the ROM browser. Reset and exit both prompt for confirmation (defaulting to **No**) so a stray button press cannot discard unsaved progress.
+**Pause menu**: Hold **Start + B** for ~⅓ second to open the in-game pause menu
+(a short on-screen tip appears when a game starts). From there you can resume,
+save/load states (Left/Right on those rows changes the slot; each row shows
+whether the slot is empty or saved), toggle cheats, view **Controls**,
+**Reset game**, or exit to the ROM browser. Reset and exit both prompt for
+confirmation (defaulting to **No**). Quick-save feedback uses a top toast so it
+does not hide the exit-combo hint on the bottom bar.
 
 **Save-state shortcuts** (also available from the pause menu):
 

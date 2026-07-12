@@ -6,6 +6,8 @@
 #include "device/dc_video_device.hh"
 #include "device/dc_input.hh"
 
+#include <nba/integer.hh>
+
 #include <string>
 #include <string_view>
 #include <vector>
@@ -19,6 +21,11 @@ inline constexpr int kMenuPositionX = 544;
 inline constexpr int kMenuMaxChars =
   (kMenuPositionX - kMenuTextX) / kMenuCharWidth;
 inline constexpr int kStatusBarMaxChars = 74;
+
+enum class MenuItemStyle : u8 {
+  Normal = 0,
+  Dim = 1
+};
 
 inline auto TruncateText(std::string_view text, size_t max_chars) -> std::string {
   if(text.size() <= max_chars) {
@@ -63,10 +70,12 @@ struct DCUI {
     int selection,
     int scroll_offset,
     std::string_view status = "A=Select  B=Back  Y=Settings  Start=Loader",
-    DCInput* input = nullptr
+    DCInput* input = nullptr,
+    std::vector<MenuItemStyle> const* styles = nullptr
   );
   void DrawStatusBar(std::string_view text);
   void DrawOverlay(std::string_view text);
+  void DrawToast(std::string_view text);
   void Present();
 
   auto ShowBriefBanner(
@@ -87,6 +96,13 @@ struct DCUI {
     std::string_view message,
     DCInput& input
   ) -> void;
+
+  // Modal yes/no. Defaults to No so a stray A press cannot confirm.
+  auto ConfirmAction(
+    std::string_view title,
+    std::string_view prompt,
+    DCInput& input
+  ) -> bool;
 
 private:
   DCVideoDevice& video_;
