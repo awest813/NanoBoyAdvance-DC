@@ -10,6 +10,9 @@
 namespace nba::core {
 
 auto MP2K::ReadWaveInfo(u32 address, Sampler::WaveInfo& wave_info) -> bool {
+  // Always snapshot through CopyHostMemory on the fallback path. Prefer a
+  // direct copy when a host pointer is available so paged-ROM pages cannot
+  // be evicted between lookup and use of a dangling WaveInfo*.
   if(auto* host = bus.GetHostAddress<Sampler::WaveInfo>(address)) {
     wave_info = *host;
     return true;
@@ -103,10 +106,7 @@ void MP2K::SoundMainRAM(SoundInfo const& sound_info) {
       hq_envelope_volume[0] = U8ToFloat(channel.envelope_attack);
 
       sampler = {};
-      const Sampler::WaveInfo* const wave_info = bus.GetHostAddress<Sampler::WaveInfo>(channel.wave_address);
-      if(wave_info != nullptr) {
-        sampler.wave_info = *wave_info;
-      } else if(!ReadWaveInfo(channel.wave_address, sampler.wave_info)) {
+      if(!ReadWaveInfo(channel.wave_address, sampler.wave_info)) {
         ATOM_WARN("MP2K: channel[{}] wave address is invalid: 0x{:08X}", i, channel.wave_address);
         channel.status = 0;
         continue;

@@ -140,6 +140,19 @@ auto DreamcastConfig::SaveDreamcastSafe(std::string const& path) -> bool {
 }
 
 void DreamcastConfig::LoadCustomData(toml::value const& data) {
+  // PlatformConfig::LoadFromData may have applied desktop defaults from a
+  // present [general] section (bios.bin / empty save_folder). Normalize back
+  // to Dreamcast VFS paths before applying the dreamcast table.
+  if(bios_path.empty() || bios_path == "bios.bin") {
+    bios_path = kDefaultBIOSPath;
+  }
+  if(save_folder.empty()) {
+    save_folder = kDefaultSaveFolder;
+  }
+  if(state_folder.empty()) {
+    state_folder = kDefaultStateFolder;
+  }
+
   if(!data.contains("dreamcast")) {
     return;
   }
@@ -149,9 +162,35 @@ void DreamcastConfig::LoadCustomData(toml::value const& data) {
     toml::find_or<std::string>(dreamcast, "performance_profile", ProfileName(performance_profile)),
     performance_profile
   );
-  frame_skip = toml::find_or<int>(dreamcast, "frame_skip", frame_skip);
-  auto_frame_skip = toml::find_or<bool>(dreamcast, "auto_frame_skip", auto_frame_skip);
-  audio_buffer_size = toml::find_or<int>(dreamcast, "audio_buffer_size", audio_buffer_size);
+
+  // Profile presets own mp2k / ppu_fast / skip_bios / default skip knobs.
+  // Only re-apply TOML overrides for keys that are actually present so a
+  // minimal `performance_profile = "Speed"` file gets the full Speed preset.
+  const bool has_frame_skip = dreamcast.contains("frame_skip");
+  const bool has_auto_frame_skip = dreamcast.contains("auto_frame_skip");
+  const bool has_audio_buffer = dreamcast.contains("audio_buffer_size");
+  const int ov_frame_skip = has_frame_skip
+    ? toml::find<int>(dreamcast, "frame_skip")
+    : 0;
+  const bool ov_auto_frame_skip = has_auto_frame_skip
+    ? toml::find<bool>(dreamcast, "auto_frame_skip")
+    : false;
+  const int ov_audio_buffer = has_audio_buffer
+    ? toml::find<int>(dreamcast, "audio_buffer_size")
+    : 0;
+
+  ApplyPerformanceProfile(performance_profile);
+
+  if(has_frame_skip) {
+    frame_skip = std::clamp(ov_frame_skip, 0, 3);
+  }
+  if(has_auto_frame_skip) {
+    auto_frame_skip = ov_auto_frame_skip;
+  }
+  if(has_audio_buffer) {
+    audio_buffer_size = ov_audio_buffer;
+  }
+
   show_fps = toml::find_or<bool>(dreamcast, "show_fps", show_fps);
   allow_large_roms = toml::find_or<bool>(dreamcast, "allow_large_roms", allow_large_roms);
   pvr_dma_upload = toml::find_or<bool>(dreamcast, "pvr_dma_upload", pvr_dma_upload);
@@ -166,6 +205,14 @@ void DreamcastConfig::LoadCustomData(toml::value const& data) {
   if(audio_buffer_size != 2048 && audio_buffer_size != 4096 && audio_buffer_size != 8192) {
     audio_buffer_size = 4096;
   }
+
+  DCLog(
+    "[NBA-DC] Config: profile=%s mp2k_hle=%d ppu_fast=%d auto_fs=%d\n",
+    ProfileName(performance_profile),
+    audio.mp2k_hle_enable ? 1 : 0,
+    ppu_fast_mode ? 1 : 0,
+    auto_frame_skip ? 1 : 0
+  );
 }
 
 void DreamcastConfig::SaveCustomData(toml::value& data) {

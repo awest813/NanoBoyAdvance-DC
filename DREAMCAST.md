@@ -226,6 +226,9 @@ overlay shows this as `FSA<n>`; manual mode is shown as `FS <n>`.
 - If the file is missing or malformed, the emulator silently falls back to
   defaults; the `[NBA-DC] Config:` lines on stdout report which path was taken
   and whether each save succeeded.
+- `performance_profile` applies the matching Accuracy / Balanced / Speed preset
+  on load. Optional `frame_skip`, `auto_frame_skip`, and `audio_buffer_size`
+  keys override that preset only when present in the file.
 
 ## Hardware Mapping (Gameplay)
 

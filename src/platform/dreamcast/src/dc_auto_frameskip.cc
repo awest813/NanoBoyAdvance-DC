@@ -65,8 +65,9 @@ auto UpdateAutoFrameSkip(
     );
   }
 
-  config.frame_skip = std::clamp(next_frame_skip, 0, 3);
-  return config.frame_skip;
+  // Keep the live auto-tuned level out of config.frame_skip so saving
+  // nba-dc.toml after a session does not overwrite the user's baseline.
+  return std::clamp(next_frame_skip, 0, 3);
 }
 
 auto FormatGameplayOverlay(std::string const& message) -> std::string {

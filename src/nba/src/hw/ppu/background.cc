@@ -13,9 +13,9 @@ namespace nba::core {
 void PPU::AdvanceSuppressedRasterScanline() {
   const int mode = mmio.dispcnt.mode;
 
-  if(mmio.vcount < 159) {
-    FinishBackgroundScanline(mode, 1232);
-  }
+  // Always finish the scanline (including vcount 159) so affine BG reference
+  // points advance the same way as the drawn path's FinishBackgroundScanline.
+  FinishBackgroundScanline(mode, 1232);
 
   const u64 timestamp_now = scheduler.GetTimestampNow();
   bg.timestamp_last_sync = timestamp_now;

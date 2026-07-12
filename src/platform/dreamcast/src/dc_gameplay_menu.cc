@@ -110,7 +110,7 @@ auto SaveStateMessage(
 ) -> std::string {
   const auto state_path = GetSaveStatePath(config, rom_path, config.save_state_slot);
   const auto state_dir = state_path.parent_path().string();
-  if(!state_dir.empty()) {
+  if(!state_dir.empty() && !IsVMUSaveFolder(state_dir)) {
     EnsureDirectoryPOSIX(state_dir);
   }
 

@@ -559,7 +559,9 @@ private:
 
     if(rom_last_page && rom_last_page->valid && rom_last_page->start == page_start) {
       rom_last_page->last_used = rom_page_clock;
-      return rom_read_error ? nullptr : rom_last_page;
+      // Keep serving already-resident pages after a media error so gameplay
+      // can continue until HasReadError() trips the fatal exit path.
+      return rom_last_page;
     }
 
     for(size_t page_index = 0; page_index < active_pages; page_index++) {
@@ -567,7 +569,7 @@ private:
       if(page.valid && page.start == page_start) {
         page.last_used = rom_page_clock;
         rom_last_page = &page;
-        return rom_read_error ? nullptr : rom_last_page;
+        return rom_last_page;
       }
     }
 

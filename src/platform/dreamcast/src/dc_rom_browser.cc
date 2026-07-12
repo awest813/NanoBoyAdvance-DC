@@ -85,9 +85,9 @@ static auto BuildROMLabel(
   return label;
 }
 
-static auto IsROMEntryLaunchable(size_t size, DreamcastConfig const& config) -> bool {
-  if(size == 0) {
-    return true;
+static auto IsROMEntryLaunchable(size_t size, bool have_size, DreamcastConfig const& config) -> bool {
+  if(!have_size || size == 0) {
+    return false;
   }
 
   return size <= kStockDreamcastMaxROMSize || CanLoadLargeROM(config);
@@ -126,7 +126,7 @@ static auto AddROMEntry(
     label.resize(semicolon);
   }
 
-  const bool launchable = IsROMEntryLaunchable(have_size ? size : 0, config);
+  const bool launchable = IsROMEntryLaunchable(size, have_size, config);
 
   seen.insert(entry_path);
   if(have_size) {
@@ -268,14 +268,14 @@ auto ROMBrowser::Scan(DreamcastConfig const& config) -> std::vector<ROMEntry> {
             entry_path,
             BuildROMLabel(std::move(last_label), size, config) + " (last)",
             size,
-            IsROMEntryLaunchable(size, config)
+            IsROMEntryLaunchable(size, true, config)
           });
         } else {
           entries.push_back(ROMEntry{
             entry_path,
             std::move(last_label) + " (size unknown) (last)",
             0,
-            true
+            false
           });
         }
       }

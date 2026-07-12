@@ -77,7 +77,12 @@ void DCUI::DrawMenu(
   static constexpr std::uint16_t kSelectionColor = 0x294A;
 
   const int item_count = static_cast<int>(items.size());
-  const int visible = std::min(item_count - scroll_offset, kMenuVisibleRows);
+  if(item_count > 0) {
+    scroll_offset = std::clamp(scroll_offset, 0, std::max(0, item_count - 1));
+  } else {
+    scroll_offset = 0;
+  }
+  const int visible = std::min(std::max(0, item_count - scroll_offset), kMenuVisibleRows);
 
   for(int row = 0; row < visible; row++) {
     const int index = scroll_offset + row;

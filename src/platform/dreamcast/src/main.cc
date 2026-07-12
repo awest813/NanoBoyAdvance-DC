@@ -109,7 +109,7 @@ int main() {
       loaded ? "Session returned from emulator." : "RunGameSession returned false.",
       input, true
     );
-    return 0;
+    return loaded ? 0 : 1;
   }
 
   // Main loop: scan ROMs, show browser, launch sessions.
@@ -178,9 +178,13 @@ int main() {
           input, true
         );
       }
-      RunGameSession(ui, input, config, video_device, frontend_result.rom_path);
+      const bool session_ok = RunGameSession(
+        ui, input, config, video_device, frontend_result.rom_path
+      );
       config->SaveDreamcastSafe(DreamcastConfig::kDefaultConfigPath);
-      ui.ShowBriefBanner("Session ended", "Returning to ROM browser...", input);
+      if(session_ok) {
+        ui.ShowBriefBanner("Session ended", "Returning to ROM browser...", input);
+      }
     }
   }
 

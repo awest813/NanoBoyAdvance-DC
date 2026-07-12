@@ -176,6 +176,7 @@ struct BackupFile {
         return;
       }
       std::fwrite(&memory[index], 1, length, posix_file);
+      std::fflush(posix_file);
       return;
     }
 

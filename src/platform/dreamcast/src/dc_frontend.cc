@@ -88,6 +88,10 @@ void AdjustShowFps(DreamcastConfig& config, int direction) {
 
 void AdjustAllowLargeRoms(DreamcastConfig& config, int direction) {
   (void)direction;
+  if(HasExtendedRAM()) {
+    // Label is "Auto (32 MB)"; the toggle has no effect on extended RAM.
+    return;
+  }
   config.allow_large_roms = !config.allow_large_roms;
 }
 

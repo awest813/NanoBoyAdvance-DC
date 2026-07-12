@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cerrno>
+#include <cstdint>
 #include <cstdio>
 #include <cstring>
 #include <ctime>
@@ -138,6 +139,15 @@ auto EvictOldestZipCacheEntries(size_t bytes_to_keep) -> void {
 }
 
 auto CachePathForZip(fs::path const& zip_path) -> fs::path {
+  // Include a path hash so /cd/Game.zip and /pc/roms/Game.zip cannot collide
+  // on the same stem.gba cache entry.
+  std::uint32_t hash = 2166136261u;
+  const auto key = ResolveDreamcastVirtualPath(zip_path);
+  for(unsigned char character : key) {
+    hash ^= character;
+    hash *= 16777619u;
+  }
+
   auto stem = zip_path.stem().string();
   for(auto& character : stem) {
     if(character == '/' || character == '\\' || character == ':') {
@@ -145,7 +155,9 @@ auto CachePathForZip(fs::path const& zip_path) -> fs::path {
     }
   }
 
-  return fs::path{kZipCacheDir} / (stem + ".gba");
+  char hash_hex[9];
+  std::snprintf(hash_hex, sizeof(hash_hex), "%08x", hash);
+  return fs::path{kZipCacheDir} / (std::string{hash_hex} + "_" + stem + ".gba");
 }
 
 auto CacheIsValid(fs::path const& cache_path, size_t expected_size) -> bool {
@@ -217,6 +229,11 @@ auto ResolveDreamcastZipROM(fs::path const& zip_path, fs::path& rom_path) -> boo
 
   if(!EnsureZipCacheDir()) {
     mz_zip_reader_end(&archive);
+    std::printf(
+      "[NBA-DC] ZIP extract failed: writable cache required at %s\n",
+      kZipCacheDir
+    );
+    std::fflush(stdout);
     return false;
   }
 
@@ -229,6 +246,11 @@ auto ResolveDreamcastZipROM(fs::path const& zip_path, fs::path& rom_path) -> boo
         cache_string.c_str(),
         0)) {
     mz_zip_reader_end(&archive);
+    std::printf(
+      "[NBA-DC] ZIP extract failed: could not write %s (is /pc writable?)\n",
+      cache_string.c_str()
+    );
+    std::fflush(stdout);
     return false;
   }
 

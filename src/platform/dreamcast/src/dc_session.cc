@@ -484,6 +484,7 @@ auto RunGameSession(
   core.reset();
   if(rom_read_failed) {
     ui.ShowFatalError("ROM media read failed\nCheck disc/ODE media and try again.", input);
+    return false;
   } else if(save_in_memory_only) {
     if(save_flush_ok) {
       ui.ShowMessage(
