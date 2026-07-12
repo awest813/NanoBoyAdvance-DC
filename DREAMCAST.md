@@ -322,10 +322,12 @@ The Dreamcast SH4 at 200 MHz is significantly slower than modern desktop CPUs. E
 
 ### ARM Dynarec (experimental)
 
-Phase 1–4 ship an opt-in Thumb/ARM recompiler (`cpu_dynarec = true`). It compiles
+Phase 1–5 ship an opt-in Thumb/ARM recompiler (`cpu_dynarec = true`). It compiles
 ALU / memory / conditional and unconditional branches (plus a small ARM
-data-processing subset) to IR, with soft block linking and an SH4 native
-dispatch loop on `__SH4__`. Leave dynarec **Off** unless testing.
+data-processing subset) to IR, with soft block linking, IWRAM/EWRAM SMC
+invalidation, and an SH4 native dispatch loop on `__SH4__`. Show FPS reports
+`DR` hit rate when dynarec is on. Leave dynarec **Off** unless testing; Speed
+profile A/B uses **DR on Speed** / `cpu_dynarec_on_speed` or `NBA_DC_DYNAREC=1`.
 
 ### Performance Profiles
 
@@ -364,11 +366,11 @@ configuration known to have the extra memory headroom.
 Enable **Show FPS** in settings to overlay the measured display frame rate in
 the top-left corner during play. The reading is averaged once per second by the
 frame limiter. The overlay also shows `EF` (estimated emulated frames per second,
-display FPS × (frame skip + 1)), `FS`/`FSA` for manual/automatic frame skip, and
-`PG`, the number of ROM page-cache misses since the previous FPS sample. A
-title running at full speed reports ~59.7 FPS (the GBA's native rate);
-sustained readings below that indicate the SH4 cannot keep up at the current
-profile.
+display FPS × (frame skip + 1)), `FS`/`FSA` for manual/automatic frame skip,
+`PG` (ROM page-cache misses since the previous FPS sample), and — when CPU
+dynarec is on — `DR` (block-cache hit rate percent). A title running at full
+speed reports ~59.7 FPS (the GBA's native rate); sustained readings below that
+indicate the SH4 cannot keep up at the current profile.
 
 ### Repeatable Benchmark Workflow
 

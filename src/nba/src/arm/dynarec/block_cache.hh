@@ -23,6 +23,13 @@ struct BlockCache {
       slot.block = {};
     }
     size_ = 0;
+    // Keep hit/miss counters across Clear so InvalidateAll does not distort
+    // per-second DR telemetry; TakeStats resets them explicitly.
+  }
+
+  auto TakeStats(u64& hits, u64& misses) -> void {
+    hits = hits_;
+    misses = misses_;
     hits_ = 0;
     misses_ = 0;
   }
@@ -42,6 +49,21 @@ struct BlockCache {
     }
     ++misses_;
     return nullptr;
+  }
+
+  // Probe without bumping hit/miss counters (soft block linking).
+  auto Contains(u32 key) const -> bool {
+    const u32 start = Hash(key);
+    for(u32 i = 0; i < kBlockCacheCapacity; ++i) {
+      auto const& slot = slots_[(start + i) & (kBlockCacheCapacity - 1)];
+      if(slot.key == kEmpty) {
+        return false;
+      }
+      if(slot.key == key) {
+        return true;
+      }
+    }
+    return false;
   }
 
   // Insert or replace. On a full table, evict the probed slot (simple).

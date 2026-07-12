@@ -78,6 +78,17 @@ int main() {
     );
   }
 
+  // Dynarec A/B override for smoke/CI (1=on, 0=off). Unset leaves config as-is.
+  if(const char* dynarec_env = std::getenv("NBA_DC_DYNAREC")) {
+    if(dynarec_env[0] == '1' && dynarec_env[1] == '\0') {
+      config->cpu_dynarec = true;
+      DCLog("[NBA-DC] NBA_DC_DYNAREC=1 — dynarec enabled\n");
+    } else if(dynarec_env[0] == '0' && dynarec_env[1] == '\0') {
+      config->cpu_dynarec = false;
+      DCLog("[NBA-DC] NBA_DC_DYNAREC=0 — dynarec disabled\n");
+    }
+  }
+
   // Autoboot via environment variable (used by host smoke tests / CI).
   if(const char* autoboot_env = std::getenv("NBA_DC_AUTOBOOT_ROM")) {
     DCLog("[NBA-DC] Autoboot env ROM: %s\n", autoboot_env);

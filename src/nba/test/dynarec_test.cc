@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: Copyright 2026 The NanoBoyAdvance Authors
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// Dynarec Phase 1 tests: SH4 encodings, block cache, Thumb→IR compile, and
-// IR execution vs the interpreter on a short ALU block in IWRAM.
+// Dynarec Phase 1–5 tests: SH4 encodings, block cache, Thumb/ARM→IR, IR
+// execution vs interpreter, and IWRAM SMC invalidation.
 
 #include <cstdio>
 #include <cstring>
@@ -342,6 +342,44 @@ void TestArmAluVsInterpreter() {
   Expect(b.r0 == a.r0, "arm dynarec r0 match");
 }
 
+void TestSmcInvalidation() {
+  const u32 entry = 0x03000A00;
+  // mov r0, #1; add r0, #1; b self
+  std::vector<u16> code = {
+    ThumbMovImm(0, 1),
+    ThumbAddImm(0, 1),
+    static_cast<u16>(0xE7FE),
+  };
+
+  auto dyna = MakeCore(true, entry, code);
+  dyna->Run(4000);
+
+  auto before = dyna->TakeDynarecTelemetry();
+  Expect(before.cache_blocks > 0, "smc: cache populated after run");
+  Expect(before.hits + before.misses > 0, "smc: saw cache lookups");
+
+  // Overwrite the ADD with mov r0, #7 while the block is cached.
+  dyna->PokeHalf(entry + 2, ThumbMovImm(0, 7));
+
+  auto after_poke = dyna->TakeDynarecTelemetry();
+  Expect(after_poke.invalidations >= 1, "smc: poke invalidated compiled page");
+  Expect(after_poke.cache_blocks == 0, "smc: cache flushed after code write");
+
+  dyna->Run(4000);
+  const auto snap = Capture(*dyna);
+  // After recompile: mov #1; mov #7; b self → r0 == 7
+  Expect(snap.r0 == 7, "smc: recompiled block sees patched opcode");
+
+  // Data write on a different IWRAM page must not flush code pages.
+  dyna->Run(2000);
+  auto mid = dyna->TakeDynarecTelemetry();
+  Expect(mid.cache_blocks > 0, "smc: cache warm before data poke");
+  dyna->PokeHalf(0x03007000, 0x1234);
+  auto after_data = dyna->TakeDynarecTelemetry();
+  Expect(after_data.invalidations == 0, "smc: data-only poke skips invalidate");
+  Expect(after_data.cache_blocks > 0, "smc: cache survives data-only poke");
+}
+
 } // namespace
 
 int main() {
@@ -353,6 +391,7 @@ int main() {
   TestMemoryOpsVsInterpreter();
   TestCondBranchVsInterpreter();
   TestArmAluVsInterpreter();
+  TestSmcInvalidation();
 
   if(g_failures != 0) {
     std::printf("%d failure(s)\n", g_failures);

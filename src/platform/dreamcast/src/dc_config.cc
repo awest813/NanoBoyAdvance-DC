@@ -72,6 +72,11 @@ void DreamcastConfig::ApplyPerformanceProfile(PerformanceProfile profile) {
       frame_skip = 0;
       auto_frame_skip = true;
       audio_buffer_size = 8192;
+      // A/B: only enable dynarec when explicitly opted in via
+      // cpu_dynarec_on_speed (settings / toml) — never the silent default.
+      if(cpu_dynarec_on_speed) {
+        cpu_dynarec = true;
+      }
       break;
   }
 }
@@ -156,6 +161,7 @@ void DreamcastConfig::LoadCustomData(toml::value const& data) {
   allow_large_roms = toml::find_or<bool>(dreamcast, "allow_large_roms", allow_large_roms);
   pvr_dma_upload = toml::find_or<bool>(dreamcast, "pvr_dma_upload", pvr_dma_upload);
   cpu_dynarec = toml::find_or<bool>(dreamcast, "cpu_dynarec", cpu_dynarec);
+  cpu_dynarec_on_speed = toml::find_or<bool>(dreamcast, "cpu_dynarec_on_speed", cpu_dynarec_on_speed);
   rom_folder = toml::find_or<std::string>(dreamcast, "rom_folder", rom_folder);
   state_folder = toml::find_or<std::string>(dreamcast, "state_folder", state_folder);
   last_rom = toml::find_or<std::string>(dreamcast, "last_rom", last_rom);
@@ -166,6 +172,11 @@ void DreamcastConfig::LoadCustomData(toml::value const& data) {
 
   if(audio_buffer_size != 2048 && audio_buffer_size != 4096 && audio_buffer_size != 8192) {
     audio_buffer_size = 4096;
+  }
+
+  // Re-apply Speed A/B opt-in after loading the profile name + flag.
+  if(performance_profile == PerformanceProfile::Speed && cpu_dynarec_on_speed) {
+    cpu_dynarec = true;
   }
 }
 
@@ -178,6 +189,7 @@ void DreamcastConfig::SaveCustomData(toml::value& data) {
   data["dreamcast"]["allow_large_roms"] = allow_large_roms;
   data["dreamcast"]["pvr_dma_upload"] = pvr_dma_upload;
   data["dreamcast"]["cpu_dynarec"] = cpu_dynarec;
+  data["dreamcast"]["cpu_dynarec_on_speed"] = cpu_dynarec_on_speed;
   data["dreamcast"]["rom_folder"] = rom_folder;
   data["dreamcast"]["state_folder"] = state_folder;
   data["dreamcast"]["last_rom"] = last_rom;

@@ -64,6 +64,19 @@ struct CoreBase {
 
   virtual core::Scheduler& GetScheduler() = 0;
 
+  // Dynarec block-cache hit/miss/invalidation counters since the previous take.
+  // Default stub returns zeros (host tools that do not build a Core).
+  struct DynarecTelemetry {
+    u64 hits = 0;
+    u64 misses = 0;
+    u32 invalidations = 0;
+    int cache_blocks = 0;
+  };
+
+  virtual auto TakeDynarecTelemetry() -> DynarecTelemetry {
+    return {};
+  }
+
   void RunForOneFrame() {
     Run(kCyclesPerFrame);
   }

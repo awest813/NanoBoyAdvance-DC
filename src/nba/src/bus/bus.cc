@@ -194,13 +194,17 @@ void Bus::Write(u32 address, int access, T value) {
     // EWRAM (external work RAM)
     case 0x02: {
       Step(is_u32 ? 6 : 3);
-      write<T>(memory.wram.data(), Align<T>(address) & 0x3FFFF, value);
+      const u32 aligned = Align<T>(address);
+      write<T>(memory.wram.data(), aligned & 0x3FFFF, value);
+      NotifyCodeWrite(aligned, sizeof(T));
       break;
     }
     // IWRAM (internal work RAM)
     case 0x03: {
       Step(1);
-      write<T>(memory.iram.data(), Align<T>(address) & 0x7FFF,  value);
+      const u32 aligned = Align<T>(address);
+      write<T>(memory.iram.data(), aligned & 0x7FFF,  value);
+      NotifyCodeWrite(aligned, sizeof(T));
       break;
     }
     // MMIO

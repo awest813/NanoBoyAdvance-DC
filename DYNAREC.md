@@ -88,17 +88,30 @@ interpreter.
 - ARM-mode subset: data-processing (imm / reg+imm-shift) and B/B<cond>; no PC
   operands, no BL, no memory. Pipeline fetch uses `ReadWord` in ARM mode.
 
+### Phase 5 (SMC, telemetry, Speed A/B)
+
+- IWRAM/EWRAM stores notify a Bus hook; when the write hits a 256-byte page that
+  holds compiled code, the dynarec flushes the block cache + code arena.
+- Data-only writes to unmarked pages are a no-op (no full flush).
+- FPS overlay / runtime log show `DR N%` (block-cache hit rate) and log
+  `IV` (SMC invalidations) each second when dynarec is on.
+- Speed profile still defaults dynarec **Off**. Opt in with
+  `cpu_dynarec_on_speed = true` (settings: **DR on Speed**), or force via
+  `NBA_DC_DYNAREC=1` / `=0` for host A/B.
+
 ### Invalidation
 
-- `InvalidateAll()` on reset, ROM attach, cheat ROM patches, and save-state load.
-- Fine-grained page invalidation comes later (IWRAM/EWRAM writes that hit code).
+- `InvalidateAll()` on reset, ROM attach, and save-state load.
+- Page-tracked `InvalidateRange()` on IWRAM/EWRAM writes (including cheats /
+  `Poke*`) that overlap compiled pages.
 
 ## Config
 
-- `Config::cpu_dynarec` (bool, default `false`).
-- Dreamcast Speed profile does **not** auto-enable yet; toggle via
-  `cpu_dynarec = true` under `[dreamcast]` in `/pc/nba-dc.toml` or the settings
-  menu once wired.
+- `Config::cpu_dynarec` (bool, default `false`) — master toggle.
+- `Config::cpu_dynarec_on_speed` (bool, default `false`) — when true, selecting
+  the Speed profile also sets `cpu_dynarec = true`.
+- Dreamcast: `[dreamcast] cpu_dynarec` / `cpu_dynarec_on_speed` in
+  `/pc/nba-dc.toml`, settings menu, or `NBA_DC_DYNAREC`.
 - When unset / false, `Core::Run` is unchanged.
 
 ## Phased plan
@@ -115,6 +128,7 @@ interpreter.
 
 - `nba-dynarec-test`: compile Thumb fixtures → IR → execute; compare register /
   CPSR flags against a software reference for the same opcode sequence.
+- SMC: compile IWRAM block → poke overlapping code → expect flush + recompile.
 - `Sh4Emitter` encoding self-checks (known instruction words).
 - Host Dreamcast smoke stays on the interpreter unless `cpu_dynarec` is set.
 

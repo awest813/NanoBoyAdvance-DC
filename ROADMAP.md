@@ -149,7 +149,7 @@ Accuracy / Balanced profiles.
       bridge (`nba_dr_run_one_op`); native entry on `__SH4__` only
 - [x] **Phase 3** — Thumb memory ops (LDR/STR/PUSH/POP/LDM/STM + ADR/ADD SP)
 - [x] **Phase 4** — Conditional branches, soft block linking, ARM ALU/B subset
-- [ ] **Phase 5** — SMC invalidation; `DR` hit-rate telemetry; Speed-profile A/B
+- [x] **Phase 5** — SMC invalidation; `DR` hit-rate telemetry; Speed-profile A/B
 
 ## Milestone 5: PPU / GPU Overhaul (Max Performance)
 
