@@ -59,6 +59,17 @@ Each IR guest instruction still performs the interpreter’s pipeline code-fetch
 interpreter helpers. Approximate bulk cycle skipping is deferred until segment
 timers show fetch overhead dominating.
 
+### Phase 2 (SH4 native path)
+
+On `__SH4__` targets the dynarec lowers each cached block to a fixed SH4 loop in
+a 512 KiB bump-allocated code arena (`CodeArena`). The loop calls
+`nba_dr_run_one_op()` per IR micro-op (same semantics as the IR executor) and
+returns a `bool` to the dispatcher. `CodeArena::FlushExecutable()` issues
+`icache_flush_range()` when KOS cache headers are available.
+
+Host builds still emit and size-check the SH4 machine code for CI, but
+`CompiledBlock::native` stays null because the buffer cannot be executed.
+
 ### Invalidation
 
 - `InvalidateAll()` on reset, ROM attach, cheat ROM patches, and save-state load.
@@ -76,7 +87,7 @@ timers show fetch overhead dominating.
 
 | Phase | Deliverable |
 |-------|-------------|
-| **1 (this PR)** | IR + Thumb ALU/branch compiler, block cache, IR executor, SH4 encoder stubs, config flag, unit tests, docs |
+| **1** | IR + Thumb ALU/branch compiler, block cache, IR executor, SH4 encoder stubs, config flag, unit tests |
 | **2** | SH4 native emit for Phase-1 IR; icache flush; run native blocks on retail/Flycast |
 | **3** | Thumb memory ops (LDR/STR/LDM/STM) via bus helpers; spill/fill |
 | **4** | Conditional branches + block linking; ARM mode subset |

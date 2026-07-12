@@ -145,7 +145,8 @@ Accuracy / Balanced profiles.
 
 - [x] **Phase 1** — IR + Thumb ALU/branch compiler, block cache, IR executor,
       SH4 encoder stubs, `cpu_dynarec` config + settings toggle, host unit tests
-- [ ] **Phase 2** — SH4 native emit for Phase-1 IR; icache flush; retail/Flycast
+- [x] **Phase 2** — SH4 native loop emit, code arena, I-cache flush, C helper
+      bridge (`nba_dr_run_one_op`); native entry on `__SH4__` only
 - [ ] **Phase 3** — Thumb memory ops via bus helpers
 - [ ] **Phase 4** — Conditional branches + block linking; ARM mode subset
 - [ ] **Phase 5** — SMC invalidation; `DR` hit-rate telemetry; Speed-profile A/B

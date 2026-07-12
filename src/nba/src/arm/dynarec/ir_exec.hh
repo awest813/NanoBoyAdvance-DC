@@ -11,8 +11,6 @@ struct ARM7TDMI;
 
 namespace dynarec {
 
-// Execute a compiled IR block against the live CPU. Returns false if an IRQ
-// forced an early exit (SignalIRQ already applied); true otherwise.
 auto ExecuteIrBlock(ARM7TDMI& cpu, CompiledBlock const& block) -> bool;
 
 } // namespace dynarec

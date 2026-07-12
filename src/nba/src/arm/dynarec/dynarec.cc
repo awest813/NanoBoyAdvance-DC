@@ -3,17 +3,27 @@
 
 #include "arm/dynarec/dynarec.hh"
 #include "arm/dynarec/ir_exec.hh"
+#include "arm/dynarec/sh4_compile.hh"
 #include "arm/dynarec/thumb_compiler.hh"
 #include "arm/arm7tdmi.hh"
 
 namespace nba::core::arm::dynarec {
+
+void Dynarec::Reset() {
+  cache_.Clear();
+  arena_.Reset();
+}
+
+void Dynarec::InvalidateAll() {
+  cache_.Clear();
+  arena_.Reset();
+}
 
 auto Dynarec::TryRunBlock() -> bool {
   if(!cpu_.state.cpsr.f.thumb) {
     return false;
   }
 
-  // Guest PC of the next instruction to execute is r15 - 4 in Thumb.
   const u32 pc = (cpu_.state.r15 - 4) & ~1u;
   const u32 key = BlockKey(pc, true);
 
@@ -23,12 +33,19 @@ auto Dynarec::TryRunBlock() -> bool {
     if(!CompileThumbBlock(cpu_.bus, pc, compiled)) {
       return false;
     }
+
+    const auto native = TryCompileSh4Block(compiled, arena_);
+    if(native.entry != nullptr) {
+      compiled.native = native.entry;
+      compiled.native_code = native.code;
+      compiled.native_size = native.size;
+    }
+
     block = cache_.Insert(key, compiled);
   }
 
   if(block->native != nullptr) {
-    block->native(&cpu_);
-    return true;
+    return block->native(&cpu_, block->ir.data(), block->ir_count);
   }
 
   return ExecuteIrBlock(cpu_, *block);

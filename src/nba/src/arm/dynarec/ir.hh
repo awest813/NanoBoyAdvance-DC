@@ -46,6 +46,12 @@ enum class ShiftKind : u8 {
   ASR = 2,
 };
 
+enum class IrStepResult : u8 {
+  Continue,
+  Done,
+  IrqExit,
+};
+
 struct IrOp {
   IrOpKind kind = IrOpKind::Exit;
   u8 rd = 0;
@@ -62,8 +68,9 @@ struct CompiledBlock {
   u16 guest_insns = 0;
   std::array<IrOp, kMaxIrOps> ir{};
 
-  // Native SH4 entry (null until Phase 2 emits code).
-  void (*native)(void* cpu) = nullptr;
+  // Native SH4 entry (null on host builds). Signature:
+  // bool (*)(void* cpu, IrOp const* ops, u16 count)
+  bool (*native)(void* cpu, IrOp const* ops, u16 count) = nullptr;
   u8* native_code = nullptr;
   u32 native_size = 0;
 };

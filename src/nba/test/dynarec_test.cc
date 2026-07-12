@@ -14,6 +14,9 @@
 #include <nba/save_state.hh>
 
 #include "arm/dynarec/block_cache.hh"
+#include "arm/dynarec/code_arena.hh"
+#include "arm/dynarec/ir.hh"
+#include "arm/dynarec/sh4_compile.hh"
 #include "arm/dynarec/sh4_emitter.hh"
 #include "bus/bus.hh"
 #include "core.hh"
@@ -22,8 +25,11 @@ namespace {
 
 using nba::core::arm::dynarec::BlockCache;
 using nba::core::arm::dynarec::BlockKey;
+using nba::core::arm::dynarec::CodeArena;
 using nba::core::arm::dynarec::CompiledBlock;
+using nba::core::arm::dynarec::IrOpKind;
 using nba::core::arm::dynarec::Sh4Emitter;
+using nba::core::arm::dynarec::TryCompileSh4Block;
 namespace sh4_enc = nba::core::arm::dynarec::sh4_enc;
 
 int g_failures = 0;
@@ -174,12 +180,39 @@ void TestThumbCompiler() {
   Expect(core.PeekHalf(entry + 2) == ThumbAddImm(0, 3), "iwram poke add");
 }
 
+void TestSh4Codegen() {
+  CompiledBlock block{};
+  block.ir_count = 3;
+  block.ir[0] = {.kind = IrOpKind::MovImm, .rd = 0, .imm = 1};
+  block.ir[1] = {.kind = IrOpKind::AddImm, .rd = 0, .imm = 2};
+  block.ir[2] = {.kind = IrOpKind::Exit};
+
+  CodeArena arena;
+  const auto result = TryCompileSh4Block(block, arena);
+
+  Expect(result.code != nullptr, "sh4 code buffer allocated");
+  Expect(result.size >= 32, "sh4 code non-trivial size");
+  Expect(result.entry == nullptr, "sh4 entry null on host");
+  Expect(arena.Used() == result.size, "arena tracks emission");
+
+  const auto* words = reinterpret_cast<const u16*>(result.code);
+  const auto word_count = result.size / sizeof(u16);
+  bool saw_rts = false;
+  for(u32 i = 0; i < word_count; ++i) {
+    if(words[i] == sh4_enc::kRts) {
+      saw_rts = true;
+    }
+  }
+  Expect(saw_rts, "sh4 block ends with RTS");
+}
+
 } // namespace
 
 int main() {
   TestSh4Encodings();
   TestBlockCache();
   TestThumbCompiler();
+  TestSh4Codegen();
   TestIrVsInterpreter();
 
   if(g_failures != 0) {

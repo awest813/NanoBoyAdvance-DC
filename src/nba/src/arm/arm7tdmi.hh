@@ -101,6 +101,9 @@ struct ARM7TDMI {
   // Execute a dynarec IR block. Returns false if an IRQ was taken mid-block.
   auto RunIrBlock(dynarec::CompiledBlock const& block) -> bool;
 
+  // Execute one IR micro-op (pipeline fetch + body). Used by IR and SH4 paths.
+  auto RunOneIrOp(dynarec::IrOp const& op) -> dynarec::IrStepResult;
+
   void SwitchMode(Mode new_mode) {
     auto old_bank = GetRegisterBankByMode(state.cpsr.f.mode);
     auto new_bank = GetRegisterBankByMode(new_mode);

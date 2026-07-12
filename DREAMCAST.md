@@ -324,9 +324,13 @@ The Dreamcast SH4 at 200 MHz is significantly slower than modern desktop CPUs. E
 
 Phase 1 ships an opt-in Thumb IR recompiler (`cpu_dynarec = true`). It compiles
 basic ALU / unconditional-branch blocks and executes them through an IR path that
-still performs interpreter-equivalent pipeline fetches. Native SH4 emission is
-Phase 2. Leave this **Off** unless you are testing dynarec; Accuracy and Balanced
-profiles should keep the interpreter.
+still performs interpreter-equivalent pipeline fetches.
+
+Phase 2 adds SH4 native block dispatch on retail hardware: each cached block is
+lowered to a small SH4 loop in a fixed code arena with I-cache flush before
+execution. Per-op semantics still flow through `nba_dr_run_one_op()` until later
+phases inline hot ALU ops. Leave dynarec **Off** unless testing; Accuracy and
+Balanced profiles should keep the interpreter.
 
 ### Performance Profiles
 

@@ -7,6 +7,8 @@ set(SOURCES
   src/arm/dynarec/thumb_compiler.cc
   src/arm/dynarec/ir_exec.cc
   src/arm/dynarec/dynarec.cc
+  src/arm/dynarec/code_arena.cc
+  src/arm/dynarec/sh4_compile.cc
   src/bus/bus.cc
   src/bus/io.cc
   src/bus/serialization.cc
@@ -57,9 +59,12 @@ set(HEADERS
   src/arm/state.hh
   src/arm/dynarec/ir.hh
   src/arm/dynarec/block_cache.hh
+  src/arm/dynarec/code_arena.hh
   src/arm/dynarec/thumb_compiler.hh
   src/arm/dynarec/ir_exec.hh
   src/arm/dynarec/sh4_emitter.hh
+  src/arm/dynarec/sh4_helpers.hh
+  src/arm/dynarec/sh4_compile.hh
   src/arm/dynarec/dynarec.hh
   src/bus/bus.hh
   src/bus/io.hh
