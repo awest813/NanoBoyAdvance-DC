@@ -16,19 +16,19 @@ Balanced profiles. Dynarec is an opt-in Speed-path accelerator.
 ## Non-goals (near term)
 
 - Bit-identical cycle timing vs the interpreter on every edge case.
-- ARM (32-bit) mode recompilation (Thumb-first; most GBA user code is Thumb).
+- Full ARM (32-bit) coverage (a small ALU/B subset is compiled; Thumb remains primary).
 - Host x86_64/aarch64 native backends.
 
 ## Architecture
 
 ```
- guest Thumb stream
+ guest Thumb/ARM stream
         │
         ▼
  ┌──────────────┐     ┌─────────────┐
- │ ThumbCompiler│────▶│  IR block   │
- └──────────────┘     └──────┬──────┘
-                             │
+ │ThumbCompiler │────▶│  IR block   │
+ │ (Thumb+ARM)  │     └──────┬──────┘
+ └──────────────┘            │
               ┌──────────────┼──────────────┐
               ▼              ▼              ▼
         BlockCache     IrExecutor      Sh4Emitter
@@ -37,22 +37,25 @@ Balanced profiles. Dynarec is an opt-in Speed-path accelerator.
 
 | Piece | Role |
 |-------|------|
-| `ir.hh` | Compact micro-ops for ALU, flags, simple branches, block exit |
+| `ir.hh` | Compact micro-ops for ALU, flags, memory, branches, block exit |
 | `thumb_compiler` | Decodes a basic block into IR; aborts on unsupported ops |
 | `block_cache` | Fixed-capacity PC hash map + code/IR storage |
 | `ir_exec` | Interprets IR against `ARM7TDMI` state + `Bus` (correctness path) |
 | `sh4_emitter` | Lowers IR to SH4 machine code (enabled under `__SH4__`) |
 | `dynarec` | Lookup → compile → execute; returns false to fall back |
 
-### Block rules (Phase 1)
+### Block rules
 
-- Thumb mode only; block key is `(pc & ~1, thumb=1)`.
-- End at: conditional branch, BX/BL/BLX, SWI, memory op, MSR/MRS, CPSR mode
-  switch, or `kMaxBlockInsns` (32).
-- Unconditional `B` is compiled as the final IR op (updates PC + pipeline reload).
-- Mid-block IRQ check mirrors `ARM7TDMI::Run()` (bail before the next guest insn).
+- Block key is `(pc & ~1) | thumb`.
+- Thumb: compile ALU, memory (LDR/STR/PUSH/POP/LDM/STM), ADR/ADD SP, `B`,
+  `B<cond>`. End / fall back on BX/BL/BLX, SWI, hi-register ops, MSR/MRS, or
+  `kMaxBlockInsns` (32).
+- ARM subset: data-processing (imm / reg+imm-shift) and B/B<cond>; no PC
+  operands, BL, or memory.
+- Mid-block IRQ check mirrors `ARM7TDMI::Run()`: take IRQ only when unmasked;
+  masked IRQ line must not skip the guest instruction.
 
-### Timing model (Phase 1)
+### Timing model
 
 Each IR guest instruction still performs the interpreter’s pipeline code-fetch
 (`ReadHalf` / `ReadWord`) so scheduler timestamps advance. ALU bodies match the

@@ -38,9 +38,16 @@ auto ARM7TDMI::RunOneIrOp(dynarec::IrOp const& op) -> dynarec::IrStepResult {
     return IrStepResult::Done;
   }
 
+  // Match ARM7TDMI::Run(): probe the IRQ line, but only leave the block when
+  // SignalIRQ() actually takes the exception. If interrupts are masked
+  // (latch_irq_disable), SignalIRQ is a no-op and the guest insn must run —
+  // otherwise the dispatcher would spin without making progress.
   if(IRQLine()) {
+    const bool was_masked = latch_irq_disable;
     SignalIRQ();
-    return IrStepResult::IrqExit;
+    if(!was_masked) {
+      return IrStepResult::IrqExit;
+    }
   }
 
   latch_irq_disable = state.cpsr.f.mask_irq;

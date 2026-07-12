@@ -102,9 +102,9 @@ void AdjustCpuDynarec(DreamcastConfig& config, int direction) {
 void AdjustCpuDynarecOnSpeed(DreamcastConfig& config, int direction) {
   (void)direction;
   config.cpu_dynarec_on_speed = !config.cpu_dynarec_on_speed;
-  if(config.performance_profile == DreamcastConfig::PerformanceProfile::Speed &&
-     config.cpu_dynarec_on_speed) {
-    config.cpu_dynarec = true;
+  if(config.performance_profile == DreamcastConfig::PerformanceProfile::Speed) {
+    // Keep the opt-in flag and the live toggle aligned while on Speed.
+    config.cpu_dynarec = config.cpu_dynarec_on_speed;
   }
 }
 

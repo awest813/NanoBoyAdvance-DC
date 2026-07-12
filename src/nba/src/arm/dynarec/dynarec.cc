@@ -150,10 +150,14 @@ auto Dynarec::LookupOrCompile(u32 pc, bool thumb) -> CompiledBlock* {
   }
 
   const auto native = TryCompileSh4Block(compiled, arena_);
-  if(native.entry != nullptr) {
+  if(native.code != nullptr) {
     compiled.native = native.entry;
     compiled.native_code = native.code;
     compiled.native_size = native.size;
+  } else if(compiled.ir_count > 0) {
+    // Emit succeeded but the bump arena is full — run IR now and reclaim
+    // native space at the next block boundary.
+    pending_invalidate_ = true;
   }
 
   CompiledBlock evicted{};

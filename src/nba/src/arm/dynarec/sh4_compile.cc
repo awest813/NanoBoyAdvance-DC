@@ -16,7 +16,7 @@ static_assert(sizeof(IrOp) == 12, "SH4 stride emission assumes sizeof(IrOp) == 1
 
 using NativeEntryFn = bool (*)(void* cpu, IrOp const* ops, u16 count);
 
-auto EmitNativeLoop(Sh4Emitter& emitter, void* helper_addr) -> bool {
+auto EmitNativeLoop(Sh4Emitter& emitter, void* helper_addr) -> void {
   // SH4 GCC ABI: R4=cpu, R5=ops, R6=count. Returns bool in R0.
   emitter.StsLPrPreDec(8);
   emitter.MovImm(7, 0);
@@ -80,8 +80,6 @@ auto EmitNativeLoop(Sh4Emitter& emitter, void* helper_addr) -> bool {
   emitter.PatchBra(bra_epilogue_fail, epilogue);
   emitter.PatchBra(bra_epilogue_success, epilogue);
   emitter.PatchMovLPcDisp(helper_load, pool_pc, 0);
-
-  return true;
 }
 
 } // namespace
@@ -94,9 +92,7 @@ auto TryCompileSh4Block(CompiledBlock const& block, CodeArena& arena) -> Sh4Comp
   }
 
   Sh4Emitter emitter;
-  if(!EmitNativeLoop(emitter, reinterpret_cast<void*>(&nba_dr_run_one_op))) {
-    return result;
-  }
+  EmitNativeLoop(emitter, reinterpret_cast<void*>(&nba_dr_run_one_op));
 
   const auto size = emitter.Size();
   u8* const dest = arena.Allocate(size, 4);

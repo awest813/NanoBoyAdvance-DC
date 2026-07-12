@@ -437,6 +437,41 @@ void TestSmcDeferredDuringBlock() {
   Expect(tel.invalidations >= 1, "smc defer: self-store counted as invalidation");
 }
 
+void TestMaskedIrqDoesNotStall() {
+  // IRQ line asserted with I-bit / latch set must not skip guest instructions.
+  const u32 entry = 0x03000D00;
+  std::vector<u16> code = {
+    ThumbMovImm(0, 1),
+    ThumbAddImm(0, 1),
+    static_cast<u16>(0xE7FE),
+  };
+
+  auto arm_mask_with_line = [](nba::core::Core& core) {
+    nba::SaveState st{};
+    core.CopyState(st);
+    st.arm.regs.cpsr |= (1u << 7); // CPSR.I
+    st.arm.latch_irq_disable = true;
+    st.arm.irq_line = true;
+    // Keep PC / pipe at the block entry.
+    core.LoadState(st);
+  };
+
+  auto interp = MakeCore(false, entry, code);
+  auto dyna = MakeCore(true, entry, code);
+  arm_mask_with_line(*interp);
+  arm_mask_with_line(*dyna);
+
+  interp->Run(4000);
+  dyna->Run(4000);
+
+  const auto a = Capture(*interp);
+  const auto b = Capture(*dyna);
+  Expect(a.r0 == 2, "masked irq interp still runs (r0==2)");
+  Expect(b.r0 == a.r0, "masked irq dynarec matches interpreter");
+  Expect((a.cpsr_flags & 0xF0000000u) == (b.cpsr_flags & 0xF0000000u),
+         "masked irq NZCV match");
+}
+
 } // namespace
 
 int main() {
@@ -451,6 +486,7 @@ int main() {
   TestSmcInvalidation();
   TestSmcEwram();
   TestSmcDeferredDuringBlock();
+  TestMaskedIrqDoesNotStall();
 
   if(g_failures != 0) {
     std::printf("%d failure(s)\n", g_failures);
