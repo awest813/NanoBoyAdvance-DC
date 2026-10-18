@@ -256,9 +256,11 @@ save/load states (Left/Right on those rows changes the slot; each row shows
 whether the slot is empty or saved; an empty slot's Load row is dimmed), toggle cheats, view **Controls**,
 **Reset game**, or exit to the ROM browser. Reset, exit, and overwriting a
 filled save-state slot all prompt for confirmation (defaulting to **No**).
-The L+R+Start shortcut still saves immediately. Time spent in the pause menu
+The L+R+Start shortcut still saves immediately. Audio is silenced while the
+menu is open, including after Reset. Time spent in the pause menu
 is ignored by the FPS sample, so auto frame skip does not jump just because
-the game was paused. Quick-save feedback uses a top toast so it
+the game was paused. The Start+B chord that opens the menu is not also treated
+as Back; release it, then press B to resume. Quick-save feedback uses a top toast so it
 does not hide the exit-combo hint on the bottom bar.
 
 **Save-state shortcuts** (also available from the pause menu):

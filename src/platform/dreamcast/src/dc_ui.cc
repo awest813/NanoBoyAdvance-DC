@@ -171,6 +171,7 @@ void DCUI::ShowBriefBanner(
   DrawTextCentered(120, message);
   DrawStatusBar("Press A/B/Start to skip");
   Present();
+  input.AcknowledgeMenuButtons();
 
   for(int frame = 0; frame < max_frames; frame++) {
     DCMenuInput menu;
@@ -207,6 +208,8 @@ void DCUI::ShowMessage(
     return;
   }
 
+  input.AcknowledgeMenuButtons();
+
   while(true) {
     DCMenuInput menu;
     input.PollMenu(menu);
@@ -241,6 +244,7 @@ auto DCUI::ConfirmAction(
 ) -> bool {
   std::vector<std::string> items{"No", "Yes"};
   int selection = 0;
+  input.AcknowledgeMenuButtons();
 
   while(true) {
     DrawMenu(title, items, selection, 0, prompt, &input);

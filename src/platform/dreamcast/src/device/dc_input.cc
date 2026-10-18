@@ -215,6 +215,25 @@ auto DCInput::IsExitHintActive() const -> bool {
          exit_combo_frames_ < kExitDebounceFrames;
 }
 
+void DCInput::AcknowledgeMenuButtons() {
+#if NBA_DC_HAS_KOS
+  cont_state_t* state = ReadControllerState();
+  if(!state || IsInvalidControllerState(state)) {
+    previous_buttons_ = 0xFFFF;
+    previous_joyx_ = 0;
+    previous_joyy_ = 0;
+  } else {
+    previous_buttons_ = state->buttons;
+    previous_joyx_ = state->joyx;
+    previous_joyy_ = state->joyy;
+  }
+  hold_up_frames_ = 0;
+  hold_down_frames_ = 0;
+  hold_left_frames_ = 0;
+  hold_right_frames_ = 0;
+#endif
+}
+
 auto DCInput::PollMenu(DCMenuInput& menu) -> void {
 #if NBA_DC_HAS_KOS
   menu = {};

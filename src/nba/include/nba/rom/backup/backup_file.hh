@@ -45,12 +45,24 @@ struct BackupFile {
           const size_t save_size = static_cast<size_t>(fsz) & ~size_t(63);
           const auto begin = valid_sizes.begin();
           const auto end   = valid_sizes.end();
-          if(std::find(begin, end, save_size) != end) {
-            std::fseek(f, 0, SEEK_SET);
-            std::fread(file->memory.get(), 1, save_size, f);
-            file->save_size = save_size;
-            default_size = static_cast<int>(save_size);
-            loaded_existing = true;
+          // The hint can be the smaller of two valid sizes (64K FLASH, 4K
+          // EEPROM) while the file on disk is the larger one. Grow the buffer
+          // before reading so that adoption does not write past the allocation.
+          if(std::find(begin, end, save_size) != end && std::fseek(f, 0, SEEK_SET) == 0) {
+            if(save_size != file->save_size) {
+              file->memory.reset(new u8[save_size]);
+              std::memset(file->memory.get(), 0xFF, save_size);
+            }
+            const auto read = std::fread(file->memory.get(), 1, save_size, f);
+            if(read == save_size) {
+              file->save_size = save_size;
+              default_size = static_cast<int>(save_size);
+              loaded_existing = true;
+            } else {
+              file->memory.reset(new u8[static_cast<size_t>(default_size)]);
+              std::memset(file->memory.get(), 0xFF, static_cast<size_t>(default_size));
+              file->save_size = static_cast<size_t>(default_size);
+            }
           }
         }
         std::fclose(f);

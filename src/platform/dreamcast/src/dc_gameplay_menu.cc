@@ -308,6 +308,7 @@ auto DCGameplayMenu::Run(
   std::string status_message;
   int status_frames = 0;
   const auto pause_title = BuildPauseTitle(rom_path);
+  input.AcknowledgeMenuButtons();
 
   while(true) {
     const bool slot_occupied = StateSlotOccupied(config, rom_path, config.save_state_slot);

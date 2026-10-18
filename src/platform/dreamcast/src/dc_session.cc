@@ -362,6 +362,9 @@ auto RunGameSession(
 
       if(gameplay_request.open_pause_menu) {
         input.ClearKeys(*core);
+        if(audio_device->IsOpened()) {
+          audio_device->SetPause(true);
+        }
         const auto menu_action = DCGameplayMenu::Run(
           ui,
           input,
@@ -372,6 +375,8 @@ auto RunGameSession(
         );
         if(menu_action == DCGameplayMenu::Action::ExitToBrowser) {
           running = false;
+        } else if(audio_device->IsOpened()) {
+          audio_device->SetPause(false);
         }
 
         if(!config->auto_frame_skip) {

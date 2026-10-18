@@ -8,13 +8,17 @@
 #include "dc_config.hh"
 #include "dc_paths.hh"
 
+#include <nba/rom/backup/backup_file.hh>
 #include <platform/frame_limiter.hh>
 
+#include <cerrno>
 #include <chrono>
 #include <cstdio>
 #include <fstream>
 #include <string>
+#include <sys/stat.h>
 #include <thread>
+#include <vector>
 
 namespace {
 
@@ -167,6 +171,40 @@ void test_rom_path_ignores_iso_version() {
   expect_true("different roms do not match", !SameDreamcastROMPath("/cd/GAME.GBA", "/cd/OTHER.GBA"));
 }
 
+void test_dreamcast_save_adopts_larger_valid_size() {
+  const std::string path = "/pc/nba-dc-policy-flash.sav";
+  if(::mkdir("/pc", 0755) != 0 && errno != EEXIST) {
+    std::printf("SKIP larger-save adopt (/pc not writable)\n");
+    return;
+  }
+
+  constexpr size_t kLarge = 131072;
+  {
+    std::ofstream file{path, std::ios::binary | std::ios::trunc};
+    if(!file) {
+      std::printf("SKIP larger-save adopt (cannot create %s)\n", path.c_str());
+      return;
+    }
+    std::vector<char> data(kLarge, static_cast<char>(0xA5));
+    data.back() = static_cast<char>(0x5A);
+    file.write(data.data(), static_cast<std::streamsize>(data.size()));
+    if(!file.good()) {
+      std::printf("SKIP larger-save adopt (short write)\n");
+      std::remove(path.c_str());
+      return;
+    }
+  }
+
+  int bytes = 65536;
+  auto save = nba::BackupFile::OpenOrCreate(path, {65536, 131072}, bytes);
+  expect_eq("adopted byte count", static_cast<int>(kLarge), bytes);
+  expect_eq("adopted buffer size", static_cast<int>(kLarge), static_cast<int>(save->Size()));
+  expect_eq("first adopted byte", 0xA5, save->Read(0));
+  expect_eq("last adopted byte", 0x5A, save->Read(static_cast<unsigned>(kLarge - 1)));
+  save.reset();
+  std::remove(path.c_str());
+}
+
 void test_frame_limiter_resync_drops_pause() {
   using namespace std::chrono_literals;
   nba::FrameLimiter skewed(60.0f);
@@ -198,6 +236,7 @@ int main() {
   test_vmu_state_folder_is_rewritten();
   test_auto_frame_skip_does_not_write_baseline();
   test_rom_path_ignores_iso_version();
+  test_dreamcast_save_adopts_larger_valid_size();
   test_frame_limiter_resync_drops_pause();
 
   if(failures != 0) {

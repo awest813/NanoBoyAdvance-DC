@@ -39,6 +39,7 @@ private:
   Callback callback_ = nullptr;
   void* userdata_ = nullptr;
   bool opened_ = false;
+  bool paused_ = false;
   int buffer_size_ = 4096;
 };
 

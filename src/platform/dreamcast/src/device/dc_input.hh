@@ -60,6 +60,9 @@ struct DCInput {
 
   auto PollInput(CoreBase& core, DCGameplayRequest& request) -> bool;
   auto PollMenu(DCMenuInput& menu) -> void;
+  // Treat the buttons currently held as already seen, so a chord that opened
+  // a menu (Start+B pause, the exit combo) does not also activate it.
+  void AcknowledgeMenuButtons();
   auto WaitForButton(Button button) -> void;
   auto IsControllerConnected() const -> bool;
   auto IsExitHintActive() const -> bool;
