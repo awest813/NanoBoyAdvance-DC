@@ -25,6 +25,7 @@ void DCAudioDevice::SetBufferSize(int bytes) {
 bool DCAudioDevice::Open(void* userdata, Callback callback) {
   callback_ = callback;
   userdata_ = userdata;
+  paused_ = false;
 
 #if NBA_DC_HAS_KOS
   s_instance = this;
@@ -62,7 +63,11 @@ void DCAudioDevice::Reset() {
 #if NBA_DC_HAS_KOS
   if(stream_handle_ != SND_STREAM_INVALID) {
     snd_stream_stop(stream_handle_);
-    snd_stream_start(stream_handle_, 44100, 1);
+    // A reset during the pause menu must not resume sound. SetPause(false)
+    // starts the stream again when gameplay continues.
+    if(!paused_) {
+      snd_stream_start(stream_handle_, 44100, 1);
+    }
   }
 #endif
 }
@@ -72,6 +77,7 @@ auto DCAudioDevice::GetSampleRate() -> int {
 }
 
 void DCAudioDevice::SetPause(bool value) {
+  paused_ = value;
 #if NBA_DC_HAS_KOS
   if(stream_handle_ == SND_STREAM_INVALID) return;
 
@@ -80,8 +86,6 @@ void DCAudioDevice::SetPause(bool value) {
   } else {
     snd_stream_start(stream_handle_, 44100, 1);
   }
-#else
-  (void)value;
 #endif
 }
 
@@ -89,15 +93,15 @@ void DCAudioDevice::SetPause(bool value) {
 void* DCAudioDevice::StreamCallback(snd_stream_hnd_t hnd, int req, int* done) {
   (void)hnd;
 
-  static constexpr int kStreamBufferSamples = 8192;
-  static s16 stream_buffer[kStreamBufferSamples];
+  // The callback contract is a byte count. The static buffer is stereo s16,
+  // so the largest fill is its byte size, rounded down to a whole frame.
+  static s16 stream_buffer[8192];
+  int request = std::min(req, static_cast<int>(sizeof(stream_buffer)));
+  request &= ~3;
 
-  const int request = std::min(req, static_cast<int>(kStreamBufferSamples));
-
-  if(s_instance && s_instance->callback_) {
+  std::memset(stream_buffer, 0, static_cast<size_t>(request));
+  if(s_instance && s_instance->callback_ && request > 0) {
     s_instance->callback_(s_instance->userdata_, stream_buffer, request);
-  } else {
-    std::memset(stream_buffer, 0, request);
   }
 
   *done = request;

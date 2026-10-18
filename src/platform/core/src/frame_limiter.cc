@@ -20,6 +20,12 @@ void FrameLimiter::Reset(float fps) {
   m_timestamp_fps_update = std::chrono::steady_clock::now();
 }
 
+void FrameLimiter::Resync() {
+  m_frame_count = 0;
+  m_timestamp_target = std::chrono::steady_clock::now();
+  m_timestamp_fps_update = m_timestamp_target;
+}
+
 bool FrameLimiter::GetFastForward() const {
   return m_fast_forward;
 }

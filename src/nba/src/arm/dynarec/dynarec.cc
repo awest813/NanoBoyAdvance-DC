@@ -205,6 +205,7 @@ auto Dynarec::TryRunBlock() -> bool {
     const u32 exit_fallthrough = block->exit_fallthrough;
     const bool exit_taken_thumb = block->exit_taken_thumb;
     const bool exit_fallthrough_thumb = block->exit_fallthrough_thumb;
+    const bool exit_indirect = block->exit_indirect;
 
     ran_any = true;
     const bool irq_exit = !ExecuteBlock(*block);
@@ -231,7 +232,7 @@ auto Dynarec::TryRunBlock() -> bool {
       next_pc == exit_fallthrough &&
       next_thumb == exit_fallthrough_thumb;
 
-    if(!matches_taken && !matches_fallthrough) {
+    if(!matches_taken && !matches_fallthrough && !exit_indirect) {
       break;
     }
 

@@ -58,6 +58,9 @@ struct DCVideoDevice : VideoDevice {
   void DrawOverlay(std::string_view text);
   // Top letterbox toast — does not compete with the bottom status/exit bar.
   void DrawToast(std::string_view text);
+  // Clear the margins around the 2x GBA image so a previous toast or FPS line
+  // does not stick. The gameplay quad itself is left alone.
+  void ClearLetterbox();
   void Present();
 
 private:

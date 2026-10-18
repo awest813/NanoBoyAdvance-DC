@@ -50,6 +50,11 @@ struct DreamcastConfig : PlatformConfig {
 
   void ApplyDefaults();
   void ApplyPerformanceProfile(PerformanceProfile profile);
+  // Live dynarec toggle. On the Speed profile this also updates
+  // cpu_dynarec_on_speed so the two rows cannot disagree across a reboot.
+  void ToggleCpuDynarec();
+  void ToggleCpuDynarecOnSpeed();
+  auto SettingsDiffer(DreamcastConfig const& other) const -> bool;
   auto TryLoadDreamcast(std::string const& path) -> ConfigLoadResult;
   auto SaveDreamcastSafe(std::string const& path) -> bool;
 

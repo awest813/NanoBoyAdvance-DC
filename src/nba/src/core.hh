@@ -19,6 +19,8 @@ namespace nba::core {
 struct Core final : CoreBase {
   // Lets the PPU unit-test harness reach the fully-wired PPU instance.
   friend struct PPUTestAccess;
+  // Lets dynarec tests compile a block against this core's bus.
+  friend struct DynarecTestAccess;
 
   Core(std::shared_ptr<Config> config);
 

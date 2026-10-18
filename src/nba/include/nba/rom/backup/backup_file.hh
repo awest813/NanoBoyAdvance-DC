@@ -45,16 +45,30 @@ struct BackupFile {
           const size_t save_size = static_cast<size_t>(fsz) & ~size_t(63);
           const auto begin = valid_sizes.begin();
           const auto end   = valid_sizes.end();
-          if(std::find(begin, end, save_size) != end) {
-            std::fseek(f, 0, SEEK_SET);
-            std::fread(file->memory.get(), 1, save_size, f);
-            file->save_size = save_size;
-            default_size = static_cast<int>(save_size);
-            loaded_existing = true;
+          // The hint can be the smaller of two valid sizes (64K FLASH, 4K
+          // EEPROM) while the file on disk is the larger one. Grow the buffer
+          // before reading so that adoption does not write past the allocation.
+          if(std::find(begin, end, save_size) != end && std::fseek(f, 0, SEEK_SET) == 0) {
+            if(save_size != file->save_size) {
+              file->memory.reset(new u8[save_size]);
+              std::memset(file->memory.get(), 0xFF, save_size);
+            }
+            const auto read = std::fread(file->memory.get(), 1, save_size, f);
+            if(read == save_size) {
+              file->save_size = save_size;
+              default_size = static_cast<int>(save_size);
+              loaded_existing = true;
+            } else {
+              file->memory.reset(new u8[static_cast<size_t>(default_size)]);
+              std::memset(file->memory.get(), 0xFF, static_cast<size_t>(default_size));
+              file->save_size = static_cast<size_t>(default_size);
+            }
           }
         }
         std::fclose(f);
       }
+
+      const bool vmu_save = save_path_string.rfind("/vmu/", 0) == 0;
 
       auto open_for_write_back = [&]() -> bool {
         if(loaded_existing) {
@@ -82,7 +96,12 @@ struct BackupFile {
         return file->posix_file != nullptr;
       };
 
-      if(open_for_write_back()) {
+      // KallistiOS keeps an open VMU file in a RAM image and stores it on the
+      // card only when that handle is closed. A long-lived rb+ stream would
+      // fflush successfully and still leave the previous file on the VMU
+      // across a power-off. Keep the bytes in memory; Flush() does one
+      // fopen("wb") + close, which is the commit.
+      if(!vmu_save && open_for_write_back()) {
         file->auto_update = true;
       }
 
@@ -192,10 +211,10 @@ struct BackupFile {
     return save_size;
   }
 
-  // Whether save writes are streamed straight to disk.  This is false on
-  // platforms/media where the backing stream could not be opened for writing
-  // (e.g. Flycast's read-only /pc/ stream), in which case the save lives only
-  // in memory until Flush() is called at a quiet point such as session exit.
+  // Whether save writes are streamed straight to disk.  This is false when
+  // the backing stream could not be opened for writing (e.g. Flycast's
+  // read-only /pc/ stream) and on VMU, where KallistiOS only stores the file
+  // when the handle is closed. The save then lives in memory until Flush().
   auto IsPersistent() const -> bool {
     return auto_update;
   }

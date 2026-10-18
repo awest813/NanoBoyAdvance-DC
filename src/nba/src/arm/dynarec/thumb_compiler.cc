@@ -140,7 +140,38 @@ auto DecodeThumb(u16 insn, u32 insn_pc) -> Decoded {
   }
 
   if((insn & 0xFC00) == 0x4400) {
-    d.result = DecodeResult::EndBlockBefore;
+    const int op = (insn >> 8) & 3;
+    const bool h1 = (insn & (1 << 7)) != 0;
+    const bool h2 = (insn & (1 << 6)) != 0;
+    int rd = insn & 7;
+    int rm = (insn >> 3) & 7;
+    if(h1) {
+      rd |= 8;
+    }
+    if(h2) {
+      rm |= 8;
+    }
+
+    if(op == 3) {
+      d.result = DecodeResult::EndBlockAfter;
+      d.op.kind = IrOpKind::ThumbBx;
+      d.op.rm = static_cast<u8>(rm);
+      return d;
+    }
+
+    // H1 = H2 = 0 is the unpredictable encoding of this format. Leave it to
+    // the interpreter.
+    if(!h1 && !h2) {
+      d.result = DecodeResult::EndBlockBefore;
+      return d;
+    }
+
+    d.op.kind = IrOpKind::ThumbHiReg;
+    d.op.rd = static_cast<u8>(rd);
+    d.op.rm = static_cast<u8>(rm);
+    d.op.aux = static_cast<u8>(op);
+    const bool writes_pc = (op == 0 || op == 2) && rd == 15;
+    d.result = writes_pc ? DecodeResult::EndBlockAfter : DecodeResult::Emit;
     return d;
   }
 
@@ -346,16 +377,28 @@ auto DecodeArm(u32 insn, u32 insn_pc) -> Decoded {
 void FinishExits(CompiledBlock& out, u32 cursor) {
   const auto& last = out.ir[out.ir_count - 1];
   const bool thumb = out.thumb;
+  const bool hi_pc =
+    last.kind == IrOpKind::ThumbHiReg &&
+    (last.aux == 0 || last.aux == 2) &&
+    last.rd == 15;
+  const bool pop_pc =
+    (last.kind == IrOpKind::PushPop && (last.aux & 3) == 3) ||
+    (last.kind == IrOpKind::LdmStm && last.aux != 0 && last.imm == 0);
+  const bool indirect = hi_pc || last.kind == IrOpKind::ThumbBx || pop_pc;
   const bool control =
     last.kind == IrOpKind::Branch ||
     last.kind == IrOpKind::CondBranch ||
-    (last.kind == IrOpKind::PushPop && (last.aux & 3) == 3) ||
-    (last.kind == IrOpKind::LdmStm && last.aux != 0 && last.imm == 0);
+    indirect;
 
   if(!control) {
     out.ir[out.ir_count++] = IrOp{.kind = IrOpKind::Exit};
     out.exit_fallthrough = cursor;
     out.exit_fallthrough_thumb = thumb;
+    return;
+  }
+
+  if(indirect) {
+    out.exit_indirect = true;
     return;
   }
 

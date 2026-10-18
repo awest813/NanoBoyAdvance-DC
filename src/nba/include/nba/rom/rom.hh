@@ -642,6 +642,15 @@ private:
       bytes_to_read = rom_size - page_start;
     }
 
+    // Drop the slot before the read. A short read still writes into the page
+    // buffer, and leaving the old page marked valid would serve a mix of the
+    // previous cartridge data and the failed prefetch. The next real access
+    // loads the page again; this speculative miss is not a fatal media error.
+    if(rom_last_page == target) {
+      rom_last_page = nullptr;
+    }
+    target->valid = false;
+
     if(!ReadPagedROMBytes(*target, page_start, bytes_to_read)) {
       return;
     }

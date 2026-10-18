@@ -458,6 +458,52 @@ auto ARM7TDMI::RunOneIrOp(dynarec::IrOp const& op) -> dynarec::IrStepResult {
       }
       return IrStepResult::Continue;
     }
+    case IrOpKind::ThumbHiReg: {
+      u32 operand = state.reg[op.rm];
+      if(op.rm == 15) {
+        operand &= ~1u;
+      }
+
+      if(op.aux == 1) {
+        SUB(state.reg[op.rd], operand, true);
+        pipe.access = Access::Code | Access::Sequential;
+        state.r15 += 2;
+        return IrStepResult::Continue;
+      }
+
+      if(op.aux == 0) {
+        state.reg[op.rd] += operand;
+      } else {
+        state.reg[op.rd] = operand;
+      }
+
+      if(op.rd == 15) {
+        state.r15 &= ~1u;
+        ReloadPipeline16();
+        return IrStepResult::Done;
+      }
+
+      pipe.access = Access::Code | Access::Sequential;
+      state.r15 += 2;
+      return IrStepResult::Continue;
+    }
+    case IrOpKind::ThumbBx: {
+      u32 operand = state.reg[op.rm];
+      if(op.rm == 15) {
+        operand &= ~1u;
+      }
+
+      if(operand & 1u) {
+        state.cpsr.f.thumb = 1;
+        state.r15 = operand & ~1u;
+        ReloadPipeline16();
+      } else {
+        state.cpsr.f.thumb = 0;
+        state.r15 = operand;
+        ReloadPipeline32();
+      }
+      return IrStepResult::Done;
+    }
     case IrOpKind::Branch: {
       state.r15 = op.imm;
       if(state.cpsr.f.thumb) {

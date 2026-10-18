@@ -62,6 +62,16 @@ if(NOT CMAKE_CROSSCOMPILING)
   add_executable(dc-frame-timing-test test/dc_frame_timing_test.cc)
   target_include_directories(dc-frame-timing-test PRIVATE src)
   add_test(NAME dc-frame-timing COMMAND dc-frame-timing-test)
+
+  # Settings, auto frame skip, ROM path matching, and pause-clock resync.
+  add_executable(dc-policy-test
+    test/dc_policy_test.cc
+    src/dc_auto_frameskip.cc
+    src/dc_config.cc
+  )
+  target_include_directories(dc-policy-test PRIVATE src)
+  target_link_libraries(dc-policy-test PRIVATE platform-core)
+  add_test(NAME dc-policy COMMAND dc-policy-test)
 endif()
 
 set_target_properties(NanoBoyAdvance-DC PROPERTIES OUTPUT_NAME "NanoBoyAdvance")

@@ -3,6 +3,7 @@
 
 #include "dc_config.hh"
 #include "dc_log.hh"
+#include "dc_paths.hh"
 
 #include <platform/loader/dc_virtual_fs.hh>
 
@@ -89,6 +90,42 @@ void DreamcastConfig::ApplyPerformanceProfile(PerformanceProfile profile) {
   if(leaving_speed && cpu_dynarec_on_speed) {
     cpu_dynarec = false;
   }
+}
+
+void DreamcastConfig::ToggleCpuDynarec() {
+  cpu_dynarec = !cpu_dynarec;
+  // While Speed is selected, the live toggle and the Speed opt-in are one
+  // choice. Leaving them apart makes a saved "off" come back "on" at the next
+  // boot, because load re-applies cpu_dynarec_on_speed.
+  if(performance_profile == PerformanceProfile::Speed) {
+    cpu_dynarec_on_speed = cpu_dynarec;
+  }
+}
+
+void DreamcastConfig::ToggleCpuDynarecOnSpeed() {
+  cpu_dynarec_on_speed = !cpu_dynarec_on_speed;
+  if(performance_profile == PerformanceProfile::Speed) {
+    cpu_dynarec = cpu_dynarec_on_speed;
+  }
+}
+
+auto DreamcastConfig::SettingsDiffer(DreamcastConfig const& other) const -> bool {
+  return performance_profile != other.performance_profile ||
+         show_fps != other.show_fps ||
+         pvr_dma_upload != other.pvr_dma_upload ||
+         allow_large_roms != other.allow_large_roms ||
+         frame_skip != other.frame_skip ||
+         auto_frame_skip != other.auto_frame_skip ||
+         audio_buffer_size != other.audio_buffer_size ||
+         bios_path != other.bios_path ||
+         rom_folder != other.rom_folder ||
+         save_folder != other.save_folder ||
+         state_folder != other.state_folder ||
+         cpu_dynarec != other.cpu_dynarec ||
+         cpu_dynarec_on_speed != other.cpu_dynarec_on_speed ||
+         audio.mp2k_hle_enable != other.audio.mp2k_hle_enable ||
+         ppu_fast_mode != other.ppu_fast_mode ||
+         skip_bios != other.skip_bios;
 }
 
 auto DreamcastConfig::ProfileName(PerformanceProfile profile) -> const char* {
@@ -226,6 +263,18 @@ void DreamcastConfig::LoadCustomData(toml::value const& data) {
   // Re-apply Speed A/B opt-in after loading the profile name + flag.
   if(performance_profile == PerformanceProfile::Speed && cpu_dynarec_on_speed) {
     cpu_dynarec = true;
+  }
+
+  // A GBA save state is several hundred KiB (WRAM alone is 256 KiB). A VMU
+  // is 128 KiB, so a VMU state folder can never succeed. Rewrite it before
+  // the session tries to create files there.
+  if(IsVMUSaveFolder(state_folder)) {
+    DCLog(
+      "[NBA-DC] Config: state folder %s cannot hold save states; using %s\n",
+      state_folder.c_str(),
+      kDefaultStateFolder
+    );
+    state_folder = kDefaultStateFolder;
   }
 
   DCLog(

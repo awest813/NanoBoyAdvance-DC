@@ -107,16 +107,12 @@ void AdjustShowFps(DreamcastConfig& config, int direction) {
 
 void AdjustCpuDynarec(DreamcastConfig& config, int direction) {
   (void)direction;
-  config.cpu_dynarec = !config.cpu_dynarec;
+  config.ToggleCpuDynarec();
 }
 
 void AdjustCpuDynarecOnSpeed(DreamcastConfig& config, int direction) {
   (void)direction;
-  config.cpu_dynarec_on_speed = !config.cpu_dynarec_on_speed;
-  if(config.performance_profile == DreamcastConfig::PerformanceProfile::Speed) {
-    // Keep the opt-in flag and the live toggle aligned while on Speed.
-    config.cpu_dynarec = config.cpu_dynarec_on_speed;
-  }
+  config.ToggleCpuDynarecOnSpeed();
 }
 
 void AdjustAllowLargeRoms(DreamcastConfig& config, int direction) {
@@ -182,7 +178,8 @@ void AdjustSaveFolder(DreamcastConfig& config, int direction) {
 }
 
 void AdjustStateFolder(DreamcastConfig& config, int direction) {
-  static constexpr std::array<const char*, 3> kPaths{"/pc/states", "/pc", "/vmu/a1"};
+  // Save states are larger than a VMU, so /vmu is not a choice here.
+  static constexpr std::array<const char*, 2> kPaths{"/pc/states", "/pc"};
   const auto current = std::find(kPaths.begin(), kPaths.end(), config.state_folder);
   int index = current == kPaths.end() ? 0 : static_cast<int>(current - kPaths.begin());
   index = (index + direction + static_cast<int>(kPaths.size())) % static_cast<int>(kPaths.size());
@@ -192,8 +189,8 @@ void AdjustStateFolder(DreamcastConfig& config, int direction) {
 constexpr SettingRow kSettings[] {
   { "Performance", "Accuracy / Balanced / Speed preset", PerformanceLabel, AdjustPerformance },
   { "Show FPS", "On-screen FPS, EF, frame skip, page misses, DR", ShowFpsLabel, AdjustShowFps },
-  { "CPU dynarec", "Experimental ARM recompiler (see DYNAREC.md)", CpuDynarecLabel, AdjustCpuDynarec },
-  { "DR on Speed", "Speed profile also turns CPU dynarec on", CpuDynarecOnSpeedLabel, AdjustCpuDynarecOnSpeed },
+  { "CPU dynarec", "Experimental ARM recompiler; linked with DR on Speed", CpuDynarecLabel, AdjustCpuDynarec },
+  { "DR on Speed", "Speed profile turns dynarec on; linked while on Speed", CpuDynarecOnSpeedLabel, AdjustCpuDynarecOnSpeed },
   { "PVR upload", "DMA is faster; Copy is a safer fallback", PvrDmaUploadLabel, AdjustPvrDmaUpload },
   { "Large ROMs (>8 MiB)", "Only needed for 32 MB RAM mods", AllowLargeRomsLabel, AdjustAllowLargeRoms, AllowLargeRomsDimmed },
   { "Frame skip", "Auto scales under load; 0-3 is fixed", FrameSkipLabel, AdjustFrameSkip },
@@ -233,23 +230,6 @@ auto BuildRomBrowserStatus(DreamcastConfig const& config) -> std::string {
     DreamcastConfig::ProfileName(config.performance_profile)
   );
   return buffer;
-}
-
-auto SettingsDirty(DreamcastConfig const& draft, DreamcastConfig const& saved) -> bool {
-  return draft.performance_profile != saved.performance_profile ||
-         draft.show_fps != saved.show_fps ||
-         draft.pvr_dma_upload != saved.pvr_dma_upload ||
-         draft.allow_large_roms != saved.allow_large_roms ||
-         draft.frame_skip != saved.frame_skip ||
-         draft.auto_frame_skip != saved.auto_frame_skip ||
-         draft.audio_buffer_size != saved.audio_buffer_size ||
-         draft.bios_path != saved.bios_path ||
-         draft.rom_folder != saved.rom_folder ||
-         draft.save_folder != saved.save_folder ||
-         draft.state_folder != saved.state_folder ||
-         draft.audio.mp2k_hle_enable != saved.audio.mp2k_hle_enable ||
-         draft.ppu_fast_mode != saved.ppu_fast_mode ||
-         draft.skip_bios != saved.skip_bios;
 }
 
 } // namespace
@@ -335,7 +315,7 @@ auto DCSettingsMenu::Run(
         );
       }
     } else if(menu.cancel) {
-      if(SettingsDirty(draft, config)) {
+      if(draft.SettingsDiffer(config)) {
         if(!ui.ConfirmAction(
              "Discard changes?",
              "Unsaved settings will be lost  A=Confirm  B=Keep editing",
@@ -420,7 +400,7 @@ auto DCFrontend::Run(
 
   if(!config.last_rom.empty()) {
     for(int i = 0; i < static_cast<int>(entries.size()); i++) {
-      if(entries[i].path == config.last_rom) {
+      if(SameDreamcastROMPath(entries[i].path, config.last_rom)) {
         selection = i;
         break;
       }

@@ -40,7 +40,9 @@ auto ShowControlsHelp(DCUI& ui, DCInput& input) -> void {
     "X + Y + Start       Quick save\n"
     "X + Y + Select      Quick load\n"
     "X + Y + Left/Right  Change slot\n"
-    "Start+A+B+X+Y       Exit (hold)\n\n"
+    "Start+A+B+X+Y       Exit (hold)\n"
+    "Menu save asks before replacing\n"
+    "a filled slot. Quick save does not.\n\n"
     "X/Y are GBA L/R on Dreamcast.",
     input,
     true
@@ -78,6 +80,10 @@ auto SaveStateMessage(
   DreamcastConfig& config,
   fs::path const& rom_path
 ) -> std::string {
+  if(IsVMUSaveFolder(config.state_folder)) {
+    return "Save states are too large for a VMU.\nSet State folder to /pc/states.";
+  }
+
   const auto state_path = GetSaveStatePath(config, rom_path, config.save_state_slot);
   const auto state_dir = state_path.parent_path().string();
   if(!state_dir.empty() && !IsVMUSaveFolder(state_dir)) {
@@ -99,6 +105,10 @@ auto LoadStateMessage(
   DreamcastConfig& config,
   fs::path const& rom_path
 ) -> std::string {
+  if(IsVMUSaveFolder(config.state_folder)) {
+    return "Save states are too large for a VMU.\nSet State folder to /pc/states.";
+  }
+
   const auto state_path = GetSaveStatePath(config, rom_path, config.save_state_slot);
   const auto result = SaveStateLoader::Load(core, state_path);
   if(result == SaveStateLoader::Result::Success) {
@@ -196,21 +206,21 @@ auto RunCheatMenu(
 auto BuildPauseMenuItems(
   DreamcastConfig const& config,
   DCCheatDatabase const& cheats,
-  fs::path const& rom_path
+  fs::path const& rom_path,
+  bool slot_occupied
 ) -> std::vector<std::string> {
   std::vector<std::string> items;
   items.reserve(static_cast<size_t>(PauseRow::Count));
 
   items.emplace_back("Resume");
 
-  const bool occupied = StateSlotOccupied(config, rom_path, config.save_state_slot);
   char slot_line[56];
   std::snprintf(
     slot_line,
     sizeof(slot_line),
     "Save state  slot %d [%s]",
     config.save_state_slot,
-    occupied ? "saved" : "empty"
+    slot_occupied ? "saved" : "empty"
   );
   items.emplace_back(slot_line);
 
@@ -219,7 +229,7 @@ auto BuildPauseMenuItems(
     sizeof(slot_line),
     "Load state  slot %d [%s]",
     config.save_state_slot,
-    occupied ? "saved" : "empty"
+    slot_occupied ? "saved" : "empty"
   );
   items.emplace_back(slot_line);
 
@@ -235,13 +245,16 @@ auto BuildPauseMenuItems(
   return items;
 }
 
-auto BuildPauseStyles(DCCheatDatabase const& cheats) -> std::vector<MenuItemStyle> {
+auto BuildPauseStyles(DCCheatDatabase const& cheats, bool slot_occupied) -> std::vector<MenuItemStyle> {
   std::vector<MenuItemStyle> styles(
     static_cast<size_t>(PauseRow::Count),
     MenuItemStyle::Normal
   );
   if(cheats.empty()) {
     styles[static_cast<size_t>(PauseRow::Cheats)] = MenuItemStyle::Dim;
+  }
+  if(!slot_occupied) {
+    styles[static_cast<size_t>(PauseRow::LoadState)] = MenuItemStyle::Dim;
   }
   return styles;
 }
@@ -295,10 +308,12 @@ auto DCGameplayMenu::Run(
   std::string status_message;
   int status_frames = 0;
   const auto pause_title = BuildPauseTitle(rom_path);
+  input.AcknowledgeMenuButtons();
 
   while(true) {
-    auto items = BuildPauseMenuItems(config, cheats, rom_path);
-    auto styles = BuildPauseStyles(cheats);
+    const bool slot_occupied = StateSlotOccupied(config, rom_path, config.save_state_slot);
+    auto items = BuildPauseMenuItems(config, cheats, rom_path, slot_occupied);
+    auto styles = BuildPauseStyles(cheats, slot_occupied);
     const auto status = status_frames > 0
       ? std::string_view{status_message}
       : std::string_view{"A=Select  B=Resume  Left/Right=Slot on Save/Load"};
@@ -328,6 +343,15 @@ auto DCGameplayMenu::Run(
           return Action::Resume;
 
         case PauseRow::SaveState: {
+          if(slot_occupied &&
+             !ui.ConfirmAction(
+               "Overwrite state?",
+               "This slot already has a save  A=Confirm  B=Cancel",
+               input
+             )) {
+            break;
+          }
+
           const auto message = SaveStateMessage(core, config, rom_path);
           if(message.rfind("Saved", 0) == 0) {
             status_message = message;
