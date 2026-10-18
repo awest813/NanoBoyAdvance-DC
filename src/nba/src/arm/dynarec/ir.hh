@@ -40,6 +40,14 @@ enum class IrOpKind : u8 {
   // Conditional branch: aux = Condition, imm = taken target PC
   CondBranch,
 
+  // Thumb.5 ADD/CMP/MOV with a high register.
+  // rd and rm are the full register numbers (0–15). aux = 0 ADD, 1 CMP, 2 MOV.
+  // ADD/MOV with rd == 15 reloads the Thumb pipeline and ends the block.
+  ThumbHiReg,
+  // Thumb.5 BX. rm is the full source register. Ends the block; the target
+  // and the next ISA depend on the register value.
+  ThumbBx,
+
   // ARM data-processing with immediate op2 (rotated).
   // rd, rn; aux = opcode | (S<<4); rm = cond; imm = op2
   ArmDataImm,
@@ -84,6 +92,9 @@ struct CompiledBlock {
   u32 exit_fallthrough = 0;
   bool exit_taken_thumb = true;
   bool exit_fallthrough_thumb = true;
+  // Target is data-dependent (BX, MOV/ADD PC, POP {PC}). Chain only when the
+  // PC we actually landed on is already cached.
+  bool exit_indirect = false;
 
   bool (*native)(void* cpu, IrOp const* ops, u16 count) = nullptr;
   u8* native_code = nullptr;

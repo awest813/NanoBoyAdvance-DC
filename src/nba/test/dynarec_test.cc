@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: Copyright 2026 The NanoBoyAdvance Authors
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// Dynarec Phase 1–5 tests: SH4 encodings, block cache, Thumb/ARM→IR, IR
-// execution vs interpreter, and IWRAM SMC invalidation.
+// Dynarec Phase 1–6 tests: SH4 encodings, block cache, Thumb/ARM→IR, IR
+// execution vs interpreter, high-register ops / BX, and IWRAM SMC invalidation.
 
 #include <cstdio>
 #include <cstring>
@@ -18,8 +18,17 @@
 #include "arm/dynarec/ir.hh"
 #include "arm/dynarec/sh4_compile.hh"
 #include "arm/dynarec/sh4_emitter.hh"
+#include "arm/dynarec/thumb_compiler.hh"
 #include "bus/bus.hh"
 #include "core.hh"
+
+namespace nba::core {
+struct DynarecTestAccess {
+  static auto CompileThumb(Core& core, u32 pc, arm::dynarec::CompiledBlock& out) -> bool {
+    return arm::dynarec::CompileThumbBlock(core.bus, pc, out);
+  }
+};
+} // namespace nba::core
 
 namespace {
 
@@ -59,6 +68,16 @@ constexpr u16 ThumbAluAnd(int rd, int rs) {
 constexpr u16 ThumbB(int imm11) {
   return static_cast<u16>(0xE000 | (imm11 & 0x7FF));
 }
+constexpr u16 ThumbHiOp(int op, int rd, int rm) {
+  const int h1 = rd >= 8 ? 1 : 0;
+  const int h2 = rm >= 8 ? 1 : 0;
+  return static_cast<u16>(
+    0x4400 | (op << 8) | (h1 << 7) | (h2 << 6) | ((rm & 7) << 3) | (rd & 7));
+}
+constexpr u16 ThumbHiMov(int rd, int rm) { return ThumbHiOp(2, rd, rm); }
+constexpr u16 ThumbHiAdd(int rd, int rm) { return ThumbHiOp(0, rd, rm); }
+constexpr u16 ThumbHiCmp(int rd, int rm) { return ThumbHiOp(1, rd, rm); }
+constexpr u16 ThumbBx(int rm) { return ThumbHiOp(3, 0, rm); }
 
 void WriteThumb(nba::core::Core& core, u32 addr, std::vector<u16> const& code) {
   for(std::size_t i = 0; i < code.size(); ++i) {
@@ -97,7 +116,9 @@ struct Snapshot {
   u32 r0 = 0;
   u32 r1 = 0;
   u32 r2 = 0;
+  u32 r8 = 0;
   u32 cpsr_flags = 0;
+  bool thumb = false;
 };
 
 auto Capture(nba::core::Core& core) -> Snapshot {
@@ -107,8 +128,17 @@ auto Capture(nba::core::Core& core) -> Snapshot {
   s.r0 = state.arm.regs.gpr[0];
   s.r1 = state.arm.regs.gpr[1];
   s.r2 = state.arm.regs.gpr[2];
+  s.r8 = state.arm.regs.gpr[8];
   s.cpsr_flags = state.arm.regs.cpsr & 0xF0000000u;
+  s.thumb = (state.arm.regs.cpsr & (1u << 5)) != 0;
   return s;
+}
+
+void SetGpr(nba::core::Core& core, int reg, u32 value) {
+  nba::SaveState state{};
+  core.CopyState(state);
+  state.arm.regs.gpr[reg] = value;
+  core.LoadState(state);
 }
 
 auto MakeCore(bool use_dynarec, u32 entry, std::vector<u16> const& code)
@@ -437,6 +467,178 @@ void TestSmcDeferredDuringBlock() {
   Expect(tel.invalidations >= 1, "smc defer: self-store counted as invalidation");
 }
 
+void TestThumbHiRegCompiled() {
+  auto config = std::make_shared<nba::Config>();
+  config->skip_bios = true;
+  nba::core::Core core(config);
+
+  const u32 entry = 0x03001600;
+  const std::vector<u16> code = {
+    ThumbMovImm(0, 1),
+    ThumbHiMov(8, 0),
+    ThumbBx(1),
+  };
+  WriteThumb(core, entry, code);
+
+  CompiledBlock block{};
+  Expect(nba::core::DynarecTestAccess::CompileThumb(core, entry, block),
+         "hi-reg block compiles");
+  Expect(block.guest_insns == 3, "mov, hi-mov, and bx stay in one block");
+  Expect(block.ir[1].kind == IrOpKind::ThumbHiReg, "second op is hi-reg mov");
+  Expect(block.ir[1].rd == 8 && block.ir[1].rm == 0, "hi-reg mov r8, r0");
+  Expect(block.ir[2].kind == IrOpKind::ThumbBx, "block ends on bx");
+  Expect(block.exit_indirect, "bx exit is indirect");
+
+  const std::vector<u16> unpredictable = {
+    ThumbMovImm(0, 1),
+    static_cast<u16>(0x4408), // ADD r0, r1 with both registers low
+  };
+  WriteThumb(core, entry, unpredictable);
+  CompiledBlock stopped{};
+  Expect(nba::core::DynarecTestAccess::CompileThumb(core, entry, stopped),
+         "block before unpredictable hi-reg still compiles");
+  Expect(stopped.guest_insns == 1, "unpredictable hi-reg encoding is not compiled");
+}
+
+void TestThumbHiRegVsInterpreter() {
+  const u32 entry = 0x03001800;
+  std::vector<u16> code = {
+    ThumbMovImm(0, 3),
+    ThumbHiMov(8, 0),
+    ThumbMovImm(0, 4),
+    ThumbHiAdd(0, 8),
+    ThumbHiMov(1, 8),
+    ThumbHiCmp(1, 8),
+    static_cast<u16>(0xE7FE),
+  };
+
+  auto interp = MakeCore(false, entry, code);
+  auto dyna = MakeCore(true, entry, code);
+  interp->Run(8000);
+  dyna->Run(8000);
+
+  const auto a = Capture(*interp);
+  const auto b = Capture(*dyna);
+  Expect(a.r0 == 7, "hi-reg interp r0 == 7");
+  Expect(a.r1 == 3, "hi-reg interp r1 == 3");
+  Expect(a.r8 == 3, "hi-reg interp r8 == 3");
+  Expect((a.cpsr_flags & 0x40000000u) != 0, "hi-reg cmp sets Z");
+  Expect(b.r0 == a.r0 && b.r1 == a.r1 && b.r8 == a.r8, "hi-reg gprs match");
+  Expect(b.cpsr_flags == a.cpsr_flags, "hi-reg flags match");
+}
+
+void TestThumbBxThumbVsInterpreter() {
+  const u32 entry = 0x03001000;
+  const u32 target = 0x03001200;
+  std::vector<u16> code = {
+    ThumbBx(1),
+    ThumbMovImm(0, 1),
+    static_cast<u16>(0xE7FE),
+  };
+  std::vector<u16> landed = {
+    ThumbMovImm(0, 9),
+    static_cast<u16>(0xE7FE),
+  };
+
+  auto interp = MakeCore(false, entry, code);
+  auto dyna = MakeCore(true, entry, code);
+  WriteThumb(*interp, target, landed);
+  WriteThumb(*dyna, target, landed);
+  SetGpr(*interp, 1, target | 1u);
+  SetGpr(*dyna, 1, target | 1u);
+
+  interp->Run(8000);
+  dyna->Run(8000);
+
+  const auto a = Capture(*interp);
+  const auto b = Capture(*dyna);
+  Expect(a.r0 == 9 && a.thumb, "bx thumb interp lands in thumb with r0==9");
+  Expect(b.r0 == a.r0 && b.thumb == a.thumb, "bx thumb dynarec matches");
+
+  auto warm = dyna->TakeDynarecTelemetry();
+  Expect(warm.cache_blocks >= 2, "bx source and target are both cached");
+  dyna->PokeHalf(entry, ThumbMovImm(0, 3));
+  auto after = dyna->TakeDynarecTelemetry();
+  Expect(after.invalidations >= 1, "compiled bx page invalidates on write");
+}
+
+void TestThumbBxArmVsInterpreter() {
+  const u32 entry = 0x03001A00;
+  const u32 arm_entry = 0x03001B00;
+  std::vector<u16> code = {
+    ThumbBx(1),
+    static_cast<u16>(0xE7FE),
+  };
+
+  auto interp = MakeCore(false, entry, code);
+  auto dyna = MakeCore(true, entry, code);
+  interp->PokeWord(arm_entry, 0xE3A00009);     // mov r0, #9
+  interp->PokeWord(arm_entry + 4, 0xEAFFFFFE); // b self
+  dyna->PokeWord(arm_entry, 0xE3A00009);
+  dyna->PokeWord(arm_entry + 4, 0xEAFFFFFE);
+  SetGpr(*interp, 1, arm_entry);
+  SetGpr(*dyna, 1, arm_entry);
+
+  interp->Run(8000);
+  dyna->Run(8000);
+
+  const auto a = Capture(*interp);
+  const auto b = Capture(*dyna);
+  Expect(a.r0 == 9 && !a.thumb, "bx arm interp switches to ARM");
+  Expect(b.r0 == a.r0 && b.thumb == a.thumb, "bx arm dynarec matches");
+}
+
+void TestThumbMovPcVsInterpreter() {
+  const u32 entry = 0x03001C00;
+  std::vector<u16> code = {
+    ThumbMovImm(0, 1),
+    ThumbHiMov(15, 14),
+    ThumbMovImm(0, 2),
+    ThumbMovImm(0, 2),
+    ThumbMovImm(0, 6),
+    static_cast<u16>(0xE7FE),
+  };
+
+  auto interp = MakeCore(false, entry, code);
+  auto dyna = MakeCore(true, entry, code);
+  SetGpr(*interp, 14, entry + 8);
+  SetGpr(*dyna, 14, entry + 8);
+  interp->Run(8000);
+  dyna->Run(8000);
+
+  const auto a = Capture(*interp);
+  const auto b = Capture(*dyna);
+  Expect(a.r0 == 6 && a.thumb, "mov pc, lr stays in thumb at the target");
+  Expect(b.r0 == a.r0 && b.thumb == a.thumb, "mov pc dynarec matches");
+}
+
+void TestPopPcVsInterpreter() {
+  const u32 entry = 0x03001E00;
+  const u32 target = 0x03002000;
+  const u32 slot = 0x03007E00;
+  std::vector<u16> code = { ThumbPop(0x00, true) };
+  std::vector<u16> landed = {
+    ThumbMovImm(0, 4),
+    static_cast<u16>(0xE7FE),
+  };
+
+  auto interp = MakeCore(false, entry, code);
+  auto dyna = MakeCore(true, entry, code);
+  WriteThumb(*interp, target, landed);
+  WriteThumb(*dyna, target, landed);
+  interp->PokeWord(slot, target);
+  dyna->PokeWord(slot, target);
+  SetGpr(*interp, 13, slot);
+  SetGpr(*dyna, 13, slot);
+  interp->Run(8000);
+  dyna->Run(8000);
+
+  const auto a = Capture(*interp);
+  const auto b = Capture(*dyna);
+  Expect(a.r0 == 4 && a.thumb, "pop pc interp lands on the target");
+  Expect(b.r0 == a.r0 && b.thumb == a.thumb, "pop pc dynarec matches");
+}
+
 void TestMaskedIrqDoesNotStall() {
   // IRQ line asserted with I-bit / latch set must not skip guest instructions.
   const u32 entry = 0x03000D00;
@@ -486,6 +688,12 @@ int main() {
   TestSmcInvalidation();
   TestSmcEwram();
   TestSmcDeferredDuringBlock();
+  TestThumbHiRegCompiled();
+  TestThumbHiRegVsInterpreter();
+  TestThumbBxThumbVsInterpreter();
+  TestThumbBxArmVsInterpreter();
+  TestThumbMovPcVsInterpreter();
+  TestPopPcVsInterpreter();
   TestMaskedIrqDoesNotStall();
 
   if(g_failures != 0) {

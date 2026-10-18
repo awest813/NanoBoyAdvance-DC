@@ -48,7 +48,9 @@ Balanced profiles. Dynarec is an opt-in Speed-path accelerator.
 
 - Block key is `(pc & ~1) | thumb`.
 - Thumb: compile ALU, memory (LDR/STR/PUSH/POP/LDM/STM), ADR/ADD SP, `B`,
-  `B<cond>`. End / fall back on BX/BL/BLX, SWI, hi-register ops, MSR/MRS, or
+  `B<cond>`, and hi-register ADD/CMP/MOV/`BX`. `BX`, `ADD`/`MOV` to PC, and
+  `POP {PC}` end the block and may chain to an already-cached target. Fall
+  back on BL/BLX, SWI, MSR/MRS, unpredictable hi-register encodings, or
   `kMaxBlockInsns` (32).
 - ARM subset: data-processing (imm / reg+imm-shift) and B/B<cond>; no PC
   operands, BL, or memory.
@@ -87,7 +89,16 @@ interpreter.
   not-taken paths).
 - Soft block linking: after a block finishes, `TryRunBlock` chains up to
   `kMaxBlockChain` cached successors when PC matches `exit_taken` /
-  `exit_fallthrough`.
+  `exit_fallthrough`. Indirect exits (`BX`, `MOV`/`ADD` PC, `POP {PC}`) chain
+  the same way when the PC they actually landed on is already cached.
+
+### Phase 6 (Thumb high registers and BX)
+
+- Thumb.5 ADD/CMP/MOV with r8–r15, including `MOV PC, LR` (pipeline reload,
+  stays in Thumb).
+- Thumb.5 `BX` switches ISA from the register's low bit and ends the block.
+- Encodings with both register fields in r0–r7 stay on the interpreter
+  (unpredictable). BL/BLX are still not compiled.
 - ARM-mode subset: data-processing (imm / reg+imm-shift) and B/B<cond>; no PC
   operands, no BL, no memory. Pipeline fetch uses `ReadWord` in ARM mode.
 
@@ -132,6 +143,7 @@ interpreter.
 | **3** | Thumb memory ops (LDR/STR/LDM/STM) via bus helpers; spill/fill |
 | **4** | Conditional branches + block linking; ARM mode subset |
 | **5** | SMC invalidation; telemetry (`DR` hit rate in FPS overlay); Speed-profile default A/B |
+| **6** | Thumb hi-register ADD/CMP/MOV and BX; indirect exits chain to a cached target |
 
 ## Testing
 

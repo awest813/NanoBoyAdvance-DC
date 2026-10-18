@@ -150,6 +150,8 @@ Accuracy / Balanced profiles.
 - [x] **Phase 3** — Thumb memory ops (LDR/STR/PUSH/POP/LDM/STM + ADR/ADD SP)
 - [x] **Phase 4** — Conditional branches, soft block linking, ARM ALU/B subset
 - [x] **Phase 5** — SMC invalidation; `DR` hit-rate telemetry; Speed-profile A/B
+- [x] **Phase 6** — Thumb hi-register ADD/CMP/MOV and BX; indirect exits
+      (`BX`, `MOV`/`ADD` PC, `POP {PC}`) chain when the target is already cached
 
 ## Milestone 5: PPU / GPU Overhaul (Max Performance)
 
