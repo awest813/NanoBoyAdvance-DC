@@ -194,7 +194,7 @@ Configurable options:
 - **Performance** (`Accuracy` / `Balanced` / `Speed` — see Performance Profiles below)
 - **Show FPS** (`On` / `Off` — overlays FPS / EF / Skip / PG / DR during play)
 - **CPU dynarec** (`On` / `Off` — experimental recompiler; see ARM Dynarec below)
-- **DR on Speed** (`On` / `Off` — Speed profile also enables CPU dynarec)
+- **DR on Speed** (`On` / `Off` — Speed profile also enables CPU dynarec; while Speed is selected this stays linked with **CPU dynarec**)
 - **PVR upload** (`DMA` / `Copy` — texture upload path)
 - **Large ROMs** (`On` / `Off` — allows >8 MiB ROMs for 32 MB mod testing; Auto on 32 MB)
 - **Frame skip** (`Auto` or 0–3 extra emulated frames per display frame)
@@ -202,7 +202,7 @@ Configurable options:
 - **BIOS path** (`/cd/bios.bin` or `/pc/bios.bin`)
 - **ROM folder** (`/pc/roms` or `/cd`)
 - **Save folder** (`/pc/saves`, `/pc`, or `/vmu/a1`)
-- **State folder** (`/pc/states`, `/pc`, or `/vmu/a1`)
+- **State folder** (`/pc/states` or `/pc` — save states are larger than a VMU, so `/vmu` is not offered; an older config that points states at a VMU is loaded as `/pc/states`)
 
 Selecting a **Performance** profile rewrites the audio/video/frame-skip knobs
 and applies that profile's preset; you can then fine-tune Frame skip and Audio
@@ -253,9 +253,12 @@ overlay shows this as `Skip A<n>`; manual mode is shown as `Skip <n>`.
 **Pause menu**: Hold **Start + B** for ~⅓ second to open the in-game pause menu
 (a short on-screen tip appears when a game starts). From there you can resume,
 save/load states (Left/Right on those rows changes the slot; each row shows
-whether the slot is empty or saved), toggle cheats, view **Controls**,
-**Reset game**, or exit to the ROM browser. Reset and exit both prompt for
-confirmation (defaulting to **No**). Quick-save feedback uses a top toast so it
+whether the slot is empty or saved; an empty slot's Load row is dimmed), toggle cheats, view **Controls**,
+**Reset game**, or exit to the ROM browser. Reset, exit, and overwriting a
+filled save-state slot all prompt for confirmation (defaulting to **No**).
+The L+R+Start shortcut still saves immediately. Time spent in the pause menu
+is ignored by the FPS sample, so auto frame skip does not jump just because
+the game was paused. Quick-save feedback uses a top toast so it
 does not hide the exit-combo hint on the bottom bar.
 
 **Save-state shortcuts** (also available from the pause menu):
@@ -283,6 +286,8 @@ host. This is intended for menu smoke testing without KallistiOS hardware.
 
 During host gameplay smoke tests, Escape opens the pause menu, F5/F8 save/load
 states, PageUp/PageDown adjust the state slot, and Q exits to the browser.
+The SDL window shows the same FPS line, exit hint, and save/load toast as the
+Dreamcast letterbox.
 
 ### Cheats
 
@@ -293,7 +298,7 @@ Errors and loading screens show on-screen text with path details. Press Start to
 ## Current Limitations
 
 - **Cheats** – basic GameShark / PAR v1/v3 support; hook and ROM-patch codes are skipped
-- **VMU capacity** – large 128 KiB FLASH saves may not fit on a VMU
+- **VMU capacity** – large 128 KiB FLASH saves may not fit on a VMU. Save states are several hundred KiB and are stored under `/pc`, not on a VMU.
 - **No post-processing** – color correction and xBRZ upscaling are disabled (LCD ghosting is enabled only by the Accuracy profile). Gameplay frames use PVR nearest-neighbor 2× scaling; shader-based filters remain unavailable.
 - **Single-threaded** – the emulation loop runs on the main thread
 
@@ -342,6 +347,8 @@ data-processing subset) to IR, with soft block linking, IWRAM/EWRAM SMC
 invalidation, and an SH4 native dispatch loop on `__SH4__`. Show FPS reports
 `DR` hit rate when dynarec is on. Leave dynarec **Off** unless testing; Speed
 profile A/B uses **DR on Speed** / `cpu_dynarec_on_speed` or `NBA_DC_DYNAREC=1`.
+While Speed is selected, **CPU dynarec** and **DR on Speed** stay in sync, so
+turning the recompiler off is the value that gets saved.
 
 ### Performance Profiles
 

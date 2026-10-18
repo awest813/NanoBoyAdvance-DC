@@ -551,6 +551,17 @@ void DCVideoDevice::DrawOverlay(std::string_view text) {
   DrawStatusBar(text);
 }
 
+void DCVideoDevice::ClearLetterbox() {
+#if NBA_DC_HAS_SDL_MENU
+  const int game_w = kGBAWidth * kScale;
+  const int game_h = kGBAHeight * kScale;
+  DrawFilledRect(0, 0, kScreenWidth, kOffsetY, 0);
+  DrawFilledRect(0, kOffsetY + game_h, kScreenWidth, kScreenHeight - (kOffsetY + game_h), 0);
+  DrawFilledRect(0, kOffsetY, kOffsetX, game_h, 0);
+  DrawFilledRect(kOffsetX + game_w, kOffsetY, kScreenWidth - (kOffsetX + game_w), game_h, 0);
+#endif
+}
+
 void DCVideoDevice::DrawToast(std::string_view text) {
   constexpr size_t kMaxToastChars = 56;
   std::string line{text};
@@ -599,7 +610,6 @@ void DCVideoDevice::DrawRgb565(u16* buffer) {
   DrawSoftwareScaledRgb565(buffer);
 #elif NBA_DC_HAS_SDL_MENU
   DrawSoftwareScaledRgb565SDL(buffer);
-  Present();
 #else
   (void)buffer;
 #endif
@@ -619,7 +629,6 @@ void DCVideoDevice::Draw(u32* buffer) {
   DrawSoftwareScaled(buffer);
 #elif NBA_DC_HAS_SDL_MENU
   DrawSoftwareScaledSDL(buffer);
-  Present();
 #else
   (void)buffer;
 #endif

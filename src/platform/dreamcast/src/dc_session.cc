@@ -84,15 +84,15 @@ auto RunGameSession(
   auto bios_result = BIOSLoader::Validate(bios_path);
   bool using_embedded_bios = false;
 
+  std::string bios_summary = bios_path;
   if(bios_result != BIOSLoader::Result::Success) {
-    char msg[160];
-    std::snprintf(msg, sizeof(msg), "%s not found - using OpenBIOS", bios_path.c_str());
-    ui.ClearScreen();
-    ui.DrawTitle("OpenBIOS");
-    ui.DrawTextMultiline(48, 120, msg);
-    ui.DrawStatusBar("Continuing with built-in BIOS...");
-    ui.Present();
     using_embedded_bios = true;
+    bios_summary = std::string{"OpenBIOS (built-in)\n"} + BIOSLoader::Describe(bios_result);
+    DCLog(
+      "[NBA-DC] BIOS fallback: %s (%s)\n",
+      BIOSLoader::Describe(bios_result),
+      bios_path.c_str()
+    );
   }
 
   auto rom_result = ROMLoader::Result::Success;
@@ -185,7 +185,7 @@ auto RunGameSession(
 
   ui.ClearScreen();
   ui.DrawTitle("Loading");
-  ui.DrawTextMultiline(48, 120, std::string{"BIOS: "} + bios_path + "\nROM: " + rom_path.string() +
+  ui.DrawTextMultiline(48, 120, std::string{"BIOS: "} + bios_summary + "\nROM: " + rom_path.string() +
                                    "\nSave: " + save_path.string());
   ui.DrawStatusBar("Loading game data...");
   ui.Present();
@@ -346,6 +346,9 @@ auto RunGameSession(
   };
 
   while(running) {
+#if NBA_DC_HAS_SDL_MENU
+    bool drew_game_frame = false;
+#endif
 #if !NBA_DC_HAS_KOS
     frame_limiter.Run([&]() {
 #endif
@@ -374,6 +377,16 @@ auto RunGameSession(
         if(!config->auto_frame_skip) {
           active_frame_skip = config->frame_skip;
         }
+
+        // The pause menu blocks this loop. Drop that wall time so auto frame
+        // skip does not see a collapsed FPS sample, and so the host frame
+        // limiter does not run uncapped afterwards to catch up.
+#if NBA_DC_HAS_KOS
+        fps_frame_count = 0;
+        fps_last_update = std::chrono::steady_clock::now();
+#else
+        frame_limiter.Resync();
+#endif
 #if !NBA_DC_HAS_KOS
         return;
 #else
@@ -410,6 +423,9 @@ auto RunGameSession(
           });
         }
         DCFrameTiming::Instance().AddPresentedFrames();
+#if NBA_DC_HAS_SDL_MENU
+        drew_game_frame = true;
+#endif
 
         if(core->GetROM().HasReadError()) {
           rom_read_failed = true;
@@ -458,58 +474,74 @@ auto RunGameSession(
     });
 #endif
 
+#if NBA_DC_HAS_KOS || NBA_DC_HAS_SDL_MENU
+    auto draw_gameplay_chrome = [&]() {
+      if(config->show_fps) {
+        const int emulated_fps = static_cast<int>(
+          measured_fps * static_cast<float>(active_frame_skip + 1) + 0.5f
+        );
+        char fps_text[96];
+        if(measured_dr_pct >= 0) {
+          std::snprintf(
+            fps_text,
+            sizeof(fps_text),
+            "FPS %5.1f  EF %3d  Skip %s%d  PG %lu  DR %d%% IV %lu",
+            static_cast<double>(measured_fps),
+            emulated_fps,
+            config->auto_frame_skip ? "A" : "",
+            active_frame_skip,
+            static_cast<unsigned long>(measured_page_misses),
+            measured_dr_pct,
+            static_cast<unsigned long>(measured_dr_invalidations)
+          );
+        } else {
+          std::snprintf(
+            fps_text,
+            sizeof(fps_text),
+            "FPS %5.1f  EF %3d  Skip %s%d  PG %lu",
+            static_cast<double>(measured_fps),
+            emulated_fps,
+            config->auto_frame_skip ? "A" : "",
+            active_frame_skip,
+            static_cast<unsigned long>(measured_page_misses)
+          );
+        }
+        video_device->DrawText(8, 8, fps_text);
+      }
+
+      // Bottom bar: controller / exit hints only.
+      if(!input.IsControllerConnected()) {
+        video_device->DrawOverlay("Connect a controller");
+      } else if(input.IsExitHintActive()) {
+        video_device->DrawOverlay("Hold Start+A+B+X+Y to exit");
+      }
+
+      // Top toast: save/load/slot feedback (does not fight the exit hint).
+      if(gameplay_overlay_frames > 0) {
+        const std::string overlay_line = FormatGameplayOverlay(gameplay_overlay);
+        video_device->DrawToast(overlay_line.c_str());
+        gameplay_overlay_frames--;
+      }
+    };
+#endif
+
 #if NBA_DC_HAS_KOS
     if(audio_device && audio_device->IsOpened()) {
       snd_stream_poll(SND_STREAM_INVALID);
     }
 
+    // PVR present clears the framebuffer, then letterbox text is drawn into
+    // the margins that the scaled quad does not cover.
     video_device->Present();
-
-    if(config->show_fps) {
-      const int emulated_fps = static_cast<int>(
-        measured_fps * static_cast<float>(active_frame_skip + 1) + 0.5f
-      );
-      char fps_text[96];
-      if(measured_dr_pct >= 0) {
-        std::snprintf(
-          fps_text,
-          sizeof(fps_text),
-          "FPS %5.1f  EF %3d  Skip %s%d  PG %lu  DR %d%% IV %lu",
-          static_cast<double>(measured_fps),
-          emulated_fps,
-          config->auto_frame_skip ? "A" : "",
-          active_frame_skip,
-          static_cast<unsigned long>(measured_page_misses),
-          measured_dr_pct,
-          static_cast<unsigned long>(measured_dr_invalidations)
-        );
-      } else {
-        std::snprintf(
-          fps_text,
-          sizeof(fps_text),
-          "FPS %5.1f  EF %3d  Skip %s%d  PG %lu",
-          static_cast<double>(measured_fps),
-          emulated_fps,
-          config->auto_frame_skip ? "A" : "",
-          active_frame_skip,
-          static_cast<unsigned long>(measured_page_misses)
-        );
-      }
-      video_device->DrawText(8, 8, fps_text);
-    }
-
-    // Bottom bar: controller / exit hints only.
-    if(!input.IsControllerConnected()) {
-      video_device->DrawOverlay("Connect a controller");
-    } else if(input.IsExitHintActive()) {
-      video_device->DrawOverlay("Hold Start+A+B+X+Y to exit");
-    }
-
-    // Top toast: save/load/slot feedback (does not fight the exit hint).
-    if(gameplay_overlay_frames > 0) {
-      const std::string overlay_line = FormatGameplayOverlay(gameplay_overlay);
-      video_device->DrawToast(overlay_line.c_str());
-      gameplay_overlay_frames--;
+    draw_gameplay_chrome();
+#elif NBA_DC_HAS_SDL_MENU
+    // DrawRgb565 stages pixels without presenting, so overlays can composite
+    // into the letterbox before the single present. Skip this when the
+    // iteration only opened a menu — that menu already presented itself.
+    if(drew_game_frame) {
+      video_device->ClearLetterbox();
+      draw_gameplay_chrome();
+      video_device->Present();
     }
 #endif
   }

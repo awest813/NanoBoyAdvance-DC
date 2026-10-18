@@ -20,6 +20,23 @@ inline auto IsVMUSaveFolder(std::string const& path) -> bool {
   return path.rfind("/vmu/", 0) == 0;
 }
 
+// ISO9660 directory entries append a version suffix (";1"). Display names and
+// last-ROM matching should ignore it.
+inline auto StripISO9660Version(std::string text) -> std::string {
+  const auto semi = text.rfind(';');
+  if(semi != std::string::npos) {
+    text.resize(semi);
+  }
+  return text;
+}
+
+inline auto SameDreamcastROMPath(fs::path const& lhs, fs::path const& rhs) -> bool {
+  if(lhs == rhs) {
+    return true;
+  }
+  return StripISO9660Version(lhs.string()) == StripISO9660Version(rhs.string());
+}
+
 inline auto BuildVMUSaveFilename(fs::path const& rom_path) -> std::string {
   // VMU filenames are short; use a stable hash of the display stem so saves
   // remain per-ROM without depending on long filenames or extensions.

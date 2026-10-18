@@ -36,7 +36,8 @@ static constexpr float kAutoSkipEmuMsHeadroom = 14.5f;
 // per-display-frame emulation microsecond measurement from DCFrameTiming to
 // decide whether to raise or lower frame_skip.  Speed profile uses tighter
 // thresholds and an EMU-ms headroom hint.  Returns the new active frame skip
-// (0 … 3) and writes it back to config.frame_skip.
+// (0 … 3).  Does not write config.frame_skip, so a later settings save keeps
+// the user's baseline instead of the live auto-tuned level.
 auto UpdateAutoFrameSkip(
   DreamcastConfig& config,
   float measured_fps,

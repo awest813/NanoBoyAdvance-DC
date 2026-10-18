@@ -104,7 +104,9 @@ interpreter.
 - Speed profile still defaults dynarec **Off**. Opt in with
   `cpu_dynarec_on_speed = true` (settings: **DR on Speed**), or force via
   `NBA_DC_DYNAREC=1` / `=0` for host A/B. Leaving Speed clears dynarec when it
-  was armed only by that opt-in.
+  was armed only by that opt-in. While Speed is selected, the **CPU dynarec**
+  and **DR on Speed** settings stay linked, so a saved "off" is not forced
+  back on at the next boot.
 
 ### Invalidation
 

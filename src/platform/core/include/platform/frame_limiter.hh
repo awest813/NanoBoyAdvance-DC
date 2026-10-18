@@ -16,6 +16,11 @@ class FrameLimiter {
 
     void Reset();
     void Reset(float fps);
+    // Drop the current pacing window. Call this after a blocking pause so the
+    // time spent in the menu is not treated as a late frame (which both
+    // collapses the FPS sample and makes the limiter run uncapped until it
+    // catches up).
+    void Resync();
     bool GetFastForward() const;
     void SetFastForward(bool value);
     void SetFastForwardSpeed(int speed);

@@ -5,6 +5,7 @@
 
 #include "dc_log.hh"
 #include "dc_memory.hh"
+#include "dc_paths.hh"
 #include <platform/loader/dc_virtual_fs.hh>
 #include <platform/loader/rom.hh>
 
@@ -256,13 +257,20 @@ auto ROMBrowser::Scan(DreamcastConfig const& config) -> std::vector<ROMEntry> {
       const fs::path entry_path = last_path;
 #endif
 
-      if(seen.insert(entry_path).second) {
-        size_t size = 0;
-        auto last_label = entry_path.filename().string();
-        const auto sc = last_label.rfind(';');
-        if(sc != std::string::npos) {
-          last_label.resize(sc);
+      bool tagged = false;
+      for(auto& entry : entries) {
+        if(SameDreamcastROMPath(entry.path, entry_path)) {
+          if(entry.label.find(" (last)") == std::string::npos) {
+            entry.label += " (last)";
+          }
+          tagged = true;
+          break;
         }
+      }
+
+      if(!tagged && seen.insert(entry_path).second) {
+        size_t size = 0;
+        auto last_label = StripISO9660Version(entry_path.filename().string());
         if(ROMLoader::GetFileSize(entry_path, size) == ROMLoader::Result::Success) {
           entries.push_back(ROMEntry{
             entry_path,
