@@ -263,6 +263,10 @@ auto RunGameSession(
   breadcrumb("Phase 8: Core reset");
   core->Reset();
 
+  if(IsVMUSaveFolder(save_path.string()) && core->GetROM().HasBackup()) {
+    DCLog("[NBA-DC] Save: VMU data commits on flush (about once a minute and on exit)\n");
+  }
+
   DCCheatDatabase cheats;
   cheats.LoadForROM(rom_path);
   breadcrumb("Phase 9: Enter frame loop");
@@ -450,13 +454,18 @@ auto RunGameSession(
       }
 
 #if NBA_DC_HAS_KOS
-      if(running && core->GetROM().HasBackup() && core->GetROM().IsBackupPersistent()) {
+      // Streaming /pc saves only need fflush. VMU saves are not streaming:
+      // Flush() closes a whole-file write, which is what actually hits the card.
+      if(running && core->GetROM().HasBackup() &&
+         (core->GetROM().IsBackupPersistent() || IsVMUSaveFolder(save_path.string()))) {
         const auto now = std::chrono::steady_clock::now();
         const auto save_elapsed = std::chrono::duration_cast<std::chrono::seconds>(
           now - last_save_flush
         ).count();
         if(save_elapsed >= kSaveFlushIntervalSeconds) {
-          core->GetROM().FlushBackup();
+          if(!core->GetROM().FlushBackup()) {
+            DCLog("[NBA-DC] Periodic save flush failed\n");
+          }
           last_save_flush = now;
         }
       }
@@ -553,6 +562,7 @@ auto RunGameSession(
 
   bool save_in_memory_only = false;
   bool save_flush_ok = true;
+  const bool vmu_save = IsVMUSaveFolder(save_path.string());
   if(!rom_read_failed && core->GetROM().HasBackup()) {
     save_in_memory_only = !core->GetROM().IsBackupPersistent();
     save_flush_ok = core->GetROM().FlushBackup();
@@ -568,7 +578,7 @@ auto RunGameSession(
   if(rom_read_failed) {
     ui.ShowFatalError("ROM media read failed\nCheck disc/ODE media and try again.", input);
     return false;
-  } else if(save_in_memory_only) {
+  } else if(save_in_memory_only && !vmu_save) {
     if(save_flush_ok) {
       ui.ShowMessage(
         "Save Written",

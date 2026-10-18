@@ -2,19 +2,23 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 // Host checks for settings dirty-tracking, Speed dynarec linkage, VMU state
-// folder rejection, auto frame skip, ROM path matching, and pause-clock resync.
+// folder rejection, VMU save commit, paged-ROM prefetch, auto frame skip,
+// ROM path matching, and pause-clock resync.
 
 #include "dc_auto_frameskip.hh"
 #include "dc_config.hh"
 #include "dc_paths.hh"
 
 #include <nba/rom/backup/backup_file.hh>
+#include <nba/rom/rom.hh>
 #include <platform/frame_limiter.hh>
 
 #include <cerrno>
 #include <chrono>
 #include <cstdio>
+#include <cstring>
 #include <fstream>
+#include <memory>
 #include <string>
 #include <sys/stat.h>
 #include <thread>
@@ -205,6 +209,102 @@ void test_dreamcast_save_adopts_larger_valid_size() {
   std::remove(path.c_str());
 }
 
+void test_vmu_save_commits_only_on_flush() {
+  const std::string path = "/vmu/a1/nba-dc-policy.sav";
+  if((::mkdir("/vmu", 0755) != 0 && errno != EEXIST) ||
+     (::mkdir("/vmu/a1", 0755) != 0 && errno != EEXIST)) {
+    std::printf("SKIP vmu deferred commit (/vmu not writable)\n");
+    return;
+  }
+
+  constexpr size_t kBytes = 8192;
+  {
+    std::ofstream file{path, std::ios::binary | std::ios::trunc};
+    if(!file) {
+      std::printf("SKIP vmu deferred commit (cannot create %s)\n", path.c_str());
+      return;
+    }
+    std::vector<char> data(kBytes, static_cast<char>(0x11));
+    file.write(data.data(), static_cast<std::streamsize>(data.size()));
+    if(!file.good()) {
+      std::printf("SKIP vmu deferred commit (short write)\n");
+      std::remove(path.c_str());
+      return;
+    }
+  }
+
+  int bytes = static_cast<int>(kBytes);
+  {
+    auto save = nba::BackupFile::OpenOrCreate(path, {512, kBytes}, bytes);
+    expect_true("vmu save is not a streaming handle", save && !save->IsPersistent());
+    save->Write(10, 0x22);
+  }
+
+  bytes = static_cast<int>(kBytes);
+  {
+    auto save = nba::BackupFile::OpenOrCreate(path, {512, kBytes}, bytes);
+    expect_eq("unflushed vmu write is not durable", 0x11, save->Read(10));
+    save->Write(10, 0x22);
+    expect_true("vmu flush commits", save->Flush());
+  }
+
+  bytes = static_cast<int>(kBytes);
+  {
+    auto save = nba::BackupFile::OpenOrCreate(path, {512, kBytes}, bytes);
+    expect_eq("flushed vmu write is durable", 0x22, save->Read(10));
+  }
+
+  std::remove(path.c_str());
+}
+
+void test_failed_prefetch_does_not_keep_corrupt_page() {
+  const std::string path = "/tmp/nba-dc-prefetch.bin";
+  constexpr size_t kPage = nba::ROM::kPageSize;
+  constexpr size_t kRomSize = kPage * 5;
+  constexpr size_t kPartial = 64;
+
+  {
+    std::ofstream file{path, std::ios::binary | std::ios::trunc};
+    expect_true("prefetch fixture opened", static_cast<bool>(file));
+    std::vector<char> page(kPage);
+    std::memset(page.data(), 0x10, page.size());
+    file.write(page.data(), static_cast<std::streamsize>(page.size()));
+    std::memset(page.data(), 0x11, page.size());
+    file.write(page.data(), static_cast<std::streamsize>(page.size()));
+    std::memset(page.data(), 0x12, page.size());
+    file.write(page.data(), static_cast<std::streamsize>(page.size()));
+    std::vector<char> partial(kPartial, static_cast<char>(0xEE));
+    file.write(partial.data(), static_cast<std::streamsize>(partial.size()));
+    expect_true("prefetch fixture written", file.good());
+  }
+
+  // Heap: a paged ROM keeps four 1 MiB page slots.
+  auto rom = std::make_unique<nba::ROM>(
+    std::string{path},
+    kRomSize,
+    std::unique_ptr<nba::Backup>{},
+    std::unique_ptr<nba::GPIO>{},
+    0x01FFFFFFu,
+    2
+  );
+  expect_true("prefetch rom opened", rom->IsPagedROM());
+  expect_eq("two resident pages", 2, static_cast<int>(rom->GetActivePageCount()));
+
+  u8 byte = 0;
+  expect_true("read page 0", rom->CopyRange(0, 1, &byte));
+  expect_eq("page 0", 0x10, byte);
+  expect_true("read page 1", rom->CopyRange(static_cast<u32>(kPage), 1, &byte));
+  expect_eq("page 1", 0x11, byte);
+  expect_true("read page 2", rom->CopyRange(static_cast<u32>(kPage * 2), 1, &byte));
+  expect_eq("page 2", 0x12, byte);
+  expect_true("reread page 1", rom->CopyRange(static_cast<u32>(kPage), 1, &byte));
+  expect_eq("page 1 intact after failed prefetch", 0x11, byte);
+  expect_true("failed prefetch is not a fatal media error", !rom->HasReadError());
+
+  rom.reset();
+  std::remove(path.c_str());
+}
+
 void test_frame_limiter_resync_drops_pause() {
   using namespace std::chrono_literals;
   nba::FrameLimiter skewed(60.0f);
@@ -237,6 +337,8 @@ int main() {
   test_auto_frame_skip_does_not_write_baseline();
   test_rom_path_ignores_iso_version();
   test_dreamcast_save_adopts_larger_valid_size();
+  test_vmu_save_commits_only_on_flush();
+  test_failed_prefetch_does_not_keep_corrupt_page();
   test_frame_limiter_resync_drops_pause();
 
   if(failures != 0) {

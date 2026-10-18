@@ -90,6 +90,11 @@ Writable `/pc` paths require an SD/IDE adapter or equivalent host filesystem mou
   VMU filesystem cannot store long ROM names. Small EEPROM/SRAM saves are the
   best fit; 128 KiB FLASH saves may exceed available VMU capacity and fall back
   to in-memory progress if the VMU write fails.
+- KallistiOS keeps an open VMU file in RAM and writes the card only when that
+  handle is closed, so VMU saves are not streamed per byte. The emulator
+  commits the whole buffer about once a minute during play and again on exit.
+  A failed commit reports **Save Not Written**. A successful one returns to
+  the browser without an extra prompt.
 - On real KallistiOS hardware the save file is opened and written through the
   KOS virtual filesystem; on Flycast (where the `/pc/` stream may not support
   writes) saves remain in-memory for the session only.
